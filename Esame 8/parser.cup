@@ -1,0 +1,208 @@
+import java_cup.runtime.*;
+import java.io.*;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
+
+init with {:
+    map = new HashMap<String, Boolean>();
+:};
+
+parser code {:
+
+    HashMap<String, Boolean> map = new HashMap();
+
+    public class Action {
+        private Boolean bx;
+        private String str;
+
+        Action(Boolean bx, String str) {
+            this.bx = bx;
+            this.str = str;
+        }
+
+        public Boolean getBool() {
+            return this.bx;
+        }
+
+        public String getStr() {
+            return this.str;
+        }
+    }
+
+    public void report_error(String message, Object info) {
+        System.err.print("ERROR: Syntax error");
+        if (info instanceof Symbol)
+            if (((Symbol)info).left != -1){
+                int line = (((Symbol)info).left)+1;
+                int column = (((Symbol)info).right)+1;
+                System.err.print(" (linea "+line+", colonna "+column+"): ");
+            } else System.err.print(": ");
+        else System.err.print(": ");
+    }
+    public void syntax_error(Symbol cur_token){}
+
+    // ritorna actual symbol (tos = top of stack) [dalla teoria]
+    public Symbol getToken() {
+        return ((Symbol)stack.elementAt(tos));
+    }
+
+    // ritorna il semantic value del simbolo alla posizione pos [dalla teoria]
+    public Object stack(int pos) {
+        return (((Symbol)stack.elementAt(tos + pos)).value);
+    }
+
+    // Return the line number of actual symbol
+    public int getLine() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).left+1;
+        }else return -1;
+    }
+    // Return the column number of actual symbol
+    public int getColumn() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).right+1;
+        }else return -1;
+    }
+:};
+
+action code {:
+    //creazione di classi se serve raggruppare
+:};
+
+//Simboli da jflex
+terminal PV, V, EQ, QA, QC, TA, TC, TOK1, TOK2, TOK3, CMP, T, F, WITH, PRINT, AND, OR, NOT, FZ, SEP;
+terminal String VAR, STR;
+//productions di cup
+non terminal prog, cmp, assignment, command, command_list, code_section, tok3s, tok1s, toks, header;
+non terminal ArrayList<Boolean> exp_list;
+non terminal Boolean fz, bool_exp;
+non terminal String print;
+non terminal Action act;
+non terminal ArrayList<Action> actions_list;
+//precedenze se servono
+precedence left AND, OR;
+precedence left NOT;
+
+start with prog;
+
+prog ::= header SEP code_section;
+
+header ::= toks TOK2 toks 
+|toks TOK2 toks TOK2 toks TOK2 toks TOK2 toks 
+|/*empty*/;
+
+toks ::= tok1s | tok3s | /*empty*/;
+
+tok1s ::= tok1s TOK1 | TOK1;
+
+tok3s ::= tok3s TOK3 | TOK3;
+
+code_section ::= command_list | /*empty*/;
+
+command_list ::= command_list command command | command command command command;
+
+command ::= assignment | cmp;
+
+assignment ::= VAR:x EQ bool_exp:bx PV {:
+    parser.map.put(x, bx);
+    if(bx == true) {
+        System.out.println(x+" T");
+    }
+    else {
+        System.out.println(x+" F");
+
+    }
+:};
+
+cmp ::= CMP bool_exp:b1 actions_list:list {:
+    for(Action ac: list) {
+        if(ac.getBool() == b1){
+            System.out.println(ac.getStr());
+        }
+    }
+:};
+
+actions_list ::= actions_list:list act:ac {:
+    list.add(ac);
+    RESULT = list;
+:} 
+| act:ac {:
+    ArrayList<Action> list = new ArrayList();
+    list.add(ac);
+    RESULT = list;
+:};
+
+act ::= WITH bool_exp:b2 QA print:str QC {:
+    Action ac = new Action(b2, str);
+    RESULT = ac;
+:};
+
+print ::= PRINT TA STR:str TC PV {:
+    RESULT = str;
+:};
+
+bool_exp ::= bool_exp:b1 AND bool_exp:b2 {:
+    Boolean res = b1&&b2;
+    RESULT = res;
+:}
+|bool_exp:b1 OR bool_exp:b2 {:
+    Boolean res = b1||b2;
+    RESULT = res;
+:}
+|NOT bool_exp:bx {:
+    Boolean res = !bx;
+    RESULT = res;
+:}
+|TA bool_exp:b1 AND bool_exp:b2 TC {:
+    Boolean res = b1&&b2;
+    RESULT = res;
+:}
+|TA bool_exp:b1 OR bool_exp:b2 TC {:
+    Boolean res = b1||b2;
+    RESULT = res;
+:}
+|TA NOT bool_exp:bx TC {:
+    Boolean res = !bx;
+    RESULT = res;
+:}
+|T {:
+    Boolean res = true;
+    RESULT = res;
+:}
+|F {:
+    Boolean res = false;
+    RESULT = res;
+:}
+|fz:bx {:
+    RESULT = bx;
+:} 
+|VAR:var {:
+    Boolean res = parser.map.get(var);
+    RESULT = res;
+:};
+
+fz ::= FZ TA exp_list:list TC {:
+    Boolean res = true;
+    Boolean retValue = true;
+    for(Boolean bx: list) {
+        res &= bx;
+    }
+    if(res == true) {
+        retValue = true;
+    }
+    else {
+        retValue = false;
+    }
+    RESULT = retValue;
+:};
+
+exp_list ::= exp_list:list V bool_exp:bx {:
+    list.add(bx);
+    RESULT = list;
+:}
+| bool_exp:bx {:
+    ArrayList<Boolean> list = new ArrayList();
+    list.add(bx);
+    RESULT = list;
+:};

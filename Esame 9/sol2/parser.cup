@@ -1,0 +1,196 @@
+import java_cup.runtime.*;
+import java.io.*;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
+
+init with {:
+    map = new HashMap<String, ArrayList<Food>>();
+:};
+
+parser code {:
+
+    HashMap<String, ArrayList<Food>> map = new HashMap<String, ArrayList<Food>>();
+
+    public class Food {
+        private String name;
+        private Double cost;
+
+        Food(String name, Double cost) {
+            this.name = name;
+            this.cost = cost;
+        }
+
+        public String getName() {
+            return this.name;
+        }
+
+        public Double getCost() {
+            return this.cost;
+        }
+    }
+
+    public class Ingr {
+        private String cat, name;
+        private Double we;
+
+        Ingr(String cat, String name, Double we) {
+            this.cat = cat;
+            this.name = name;
+            this.we = we;
+        }
+
+        public String getCat() {
+            return this.cat;
+        }
+
+        public String getName() {
+            return this.name;
+        }
+
+        public Double getWe() {
+            return this.we;
+        }
+    }
+
+    public Double seachCost(String cat, String name){
+        ArrayList<Food> list = map.get(cat);
+        Double cost = 0.0;
+
+        for(Food fo: list){
+            if(fo.getName().equals(name)){
+                cost = fo.getCost();
+            }
+        }
+
+        return cost;
+    }
+
+    public void report_error(String message, Object info) {
+        System.err.print("ERROR: Syntax error");
+        if (info instanceof Symbol)
+            if (((Symbol)info).left != -1){
+                int line = (((Symbol)info).left)+1;
+                int column = (((Symbol)info).right)+1;
+                System.err.print(" (linea "+line+", colonna "+column+"): ");
+            } else System.err.print(": ");
+        else System.err.print(": ");
+    }
+    public void syntax_error(Symbol cur_token){}
+
+    // ritorna actual symbol (tos = top of stack) [dalla teoria]
+    public Symbol getToken() {
+        return ((Symbol)stack.elementAt(tos));
+    }
+
+    // ritorna il semantic value del simbolo alla posizione pos [dalla teoria]
+    public Object stack(int pos) {
+        return (((Symbol)stack.elementAt(tos + pos)).value);
+    }
+
+    // Return the line number of actual symbol
+    public int getLine() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).left+1;
+        }else return -1;
+    }
+    // Return the column number of actual symbol
+    public int getColumn() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).right+1;
+        }else return -1;
+    }
+:};
+
+action code {:
+    //creazione di classi se serve raggruppare
+:};
+
+terminal PV, V, DP, QA, QC, P, TOK1, TOK2, EUROKG, KG, SEP;
+terminal Integer INT;
+terminal String STR;
+terminal Double DOUBLE;
+
+non terminal prog, recipe, recipe_list, food_category, food_category_list, tok2s, header;
+non terminal Ingr ingredient;
+non terminal ArrayList<Ingr> ingredient_list;
+non terminal Food food;
+non terminal ArrayList<Food> food_list;
+//precedenze
+
+start with prog;
+
+prog ::= header SEP food_category_list SEP recipe_list
+|header SEP recipe_list
+|header SEP food_category_list 
+|header;
+
+header ::= TOK1 tok2s
+|tok2s TOK1
+|tok2s TOK1 tok2s;
+
+tok2s ::= tok2s TOK2
+|TOK2;
+
+food_category_list ::= food_category_list food_category food_category
+|food_category food_category;
+
+food_category ::= STR:name DP QA food_list:list QC PV {:
+    parser.map.put(name, list);
+:};
+
+food_list ::= food_list:list V food:fo {:
+    list.add(fo);
+    RESULT = list;
+:}
+|food:fo {:
+    ArrayList<Food> list = new ArrayList();
+    list.add(fo);
+    RESULT = list;
+:};
+
+food ::= STR:name DP DOUBLE:cost EUROKG {:
+    Food fo = new Food(name, cost);
+    RESULT = fo;
+:};
+
+recipe_list ::= recipe_list recipe 
+|recipe;
+
+recipe ::= INT:x STR:name DP ingredient_list:list PV {:
+    System.out.println(name);
+    Double tot = 0.0;
+    for(Ingr ing: list){
+        Double cost = seachCost(ing.getCat(), ing.getName());
+        Double res = cost * ing.getWe() * x;
+        tot += res;
+        System.out.println(ing.getName()+" "+res+" EURO");
+    }
+    System.out.println("TOT: "+tot+" EURO");
+:}
+|INT:x STR:name ingredient_list:list PV {:
+    System.out.println(name);
+    Double tot = 0.0;
+    for(Ingr ing: list){
+        Double cost = seachCost(ing.getCat(), ing.getName());
+        Double res = cost * ing.getWe() * x;
+        tot += res;
+        System.out.println(ing.getName()+" "+res+" EURO");
+    }
+    System.out.println("TOT: "+tot+" EURO");
+:};
+
+ingredient_list ::= ingredient_list:list V ingredient :ing {:
+    list.add(ing);
+    RESULT = list;
+:}
+|ingredient:ing {:
+    ArrayList<Ingr> list = new ArrayList();
+    list.add(ing);
+    RESULT = list;
+:};
+
+ingredient ::= STR:cat P STR:name DOUBLE:we KG {:
+    Ingr ing = new Ingr(cat, name, we);
+    RESULT = ing;
+:};

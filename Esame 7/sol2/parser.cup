@@ -1,0 +1,321 @@
+import java_cup.runtime.*;
+import java.io.*;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
+
+init with {:
+:};
+
+parser code {:
+    public class Cons {
+        private Double dist;
+        private Double uni;
+
+        Cons(Double dist, Double uni) {
+            this.dist = dist;
+            this.uni = uni;
+        }
+
+        public Double getDist() {
+            return this.dist;
+        }
+
+        public Double getUni() {
+            return this.uni;
+        }
+    }
+
+    public class Comm {
+        private Integer cod;
+        private String type;
+        private ArrayList<Cons> list;
+        private Double val;
+
+        Comm(Integer cod, String type, ArrayList<Cons> list, Double val) {
+            this.cod = cod;
+            this.type = type;
+            this.list = list;
+            this.val = val;
+        }
+
+        public Integer getCode() {
+            return this.cod;
+        }
+
+        public String getType() {
+            return this.type;
+        }
+
+        public ArrayList<Cons> getList() {
+            return this.list;
+        }
+
+        public Double getVal() {
+            return this.val;
+        }
+    }
+
+    public void report_error(String message, Object info) {
+        System.err.print("ERROR: Syntax error");
+        if (info instanceof Symbol)
+            if (((Symbol)info).left != -1){
+                int line = (((Symbol)info).left)+1;
+                int column = (((Symbol)info).right)+1;
+                System.err.print(" (linea "+line+", colonna "+column+"): ");
+            } else System.err.print(": ");
+        else System.err.print(": ");
+    }
+    public void syntax_error(Symbol cur_token){}
+
+    // ritorna actual symbol (tos = top of stack) [dalla teoria]
+    public Symbol getToken() {
+        return ((Symbol)stack.elementAt(tos));
+    }
+
+    // ritorna il semantic value del simbolo alla posizione pos [dalla teoria]
+    public Object stack(int pos) {
+        return (((Symbol)stack.elementAt(tos + pos)).value);
+    }
+
+    // Return the line number of actual symbol
+    public int getLine() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).left+1;
+        }else return -1;
+    }
+    // Return the column number of actual symbol
+    public int getColumn() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).right+1;
+        }else return -1;
+    }
+:};
+
+action code {:
+    //creazione di classi se serve raggruppare
+:};
+
+terminal PV, V, MINUS, TA, TC, TOK1, TOK2, ST, BATTERY, KWH, LITERS, FUEL, PLUS, STAR, MAX, MOD, USE, DO, DONE, UNITSKM, KM, SEP;
+terminal Double DOUBLE;
+
+non terminal prog, command_list, run_section, tok1s, tok1e, header;
+non terminal Double max, exp, fuel_ass, battery_ass;
+non terminal ArrayList<Double> exp_list;
+non terminal Integer type;
+non terminal Cons cons;
+non terminal ArrayList<Cons> cons_list;
+non terminal Comm use, mod, command;
+non terminal Double[] st;
+//precedenze
+precedence left PLUS;
+precedence left STAR;
+
+start with prog;
+
+prog ::= header SEP run_section;
+
+header ::= TOK2 tok1s
+|tok1s TOK2
+|tok1s TOK2 tok1s
+|tok1s TOK2 tok1e TOK2 tok1e
+|TOK2 tok1e TOK2 tok1s
+|tok1s TOK2 tok1e TOK2 tok1e TOK2 tok1e
+|TOK2 tok1e TOK2 tok1e TOK2 tok1s
+|/*empty*/;
+
+tok1e ::= tok1s | /*empty*/;
+
+tok1s ::= tok1s TOK1 | TOK1;
+
+run_section ::= st command_list;
+
+st ::= ST battery_ass:b MINUS fuel_ass:f PV {:
+    Double[] list = new Double[2];
+    list[0] = b;
+    list[1] = f;
+    System.out.println("battery="+list[0]+" fuel="+list[1]);
+    RESULT = list;
+:}
+|ST fuel_ass:f MINUS battery_ass:b PV {:
+    Double[] list = new Double[2];
+    list[0] = b;
+    list[1] = f;
+    System.out.println("battery="+list[0]+" fuel="+list[1]);
+    RESULT = list;
+:}
+|ST battery_ass:b PV {:
+    Double[] list = new Double[2];
+    list[0] = b;
+    list[1] = 100.0;
+    System.out.println("battery="+list[0]+" fuel="+list[1]);
+    RESULT = list;
+:}
+|ST fuel_ass:f PV {:
+    Double[] list = new Double[2];
+    list[0] = 100.0;
+    list[1] = f;
+    System.out.println("battery="+list[0]+" fuel="+list[1]);
+    RESULT = list;
+:}
+|/*empty*/  {:
+    Double[] list = new Double[2];
+    list[0] = 100.0;
+    list[1] = 100.0;
+    System.out.println("battery="+list[0]+" fuel="+list[1]);
+    RESULT = list;
+:};
+
+battery_ass ::= BATTERY exp:val KWH  {:
+    RESULT = val;
+:};
+
+fuel_ass ::= FUEL exp:val LITERS {:
+    RESULT = val;
+:};
+
+command_list ::= command_list command:c6 command:c5 {:
+    ArrayList<Comm> list = new ArrayList();
+    list.add(c5);
+    list.add(c6);
+
+    Double[] st_val = (Double[]) parser.stack(-3);
+    for(Comm cmd: list) {
+        if(cmd.getType().equals("M")){
+            if(cmd.getCode().equals(0)){
+                st_val[0] += cmd.getVal();
+            }
+            else{
+                st_val[1] += cmd.getVal();
+            }
+            System.out.println("battery="+st_val[0]+" fuel="+st_val[1]);
+        }
+        else {
+            if(cmd.getCode().equals(0)){
+                for(Cons cn: cmd.getList()){
+                    Double res = cn.getDist() * cn.getUni();
+                    st_val[0] -= res;
+                    System.out.println("battery="+st_val[0]+" fuel="+st_val[1]);
+                }
+            }
+            else{
+                for(Cons cn: cmd.getList()){
+                    Double res = cn.getDist() * cn.getUni();
+                    st_val[1] -= res;
+                    System.out.println("battery="+st_val[0]+" fuel="+st_val[1]);
+                }
+            }
+        }
+    }
+:}
+|command:c4 command:c3 command:c2 command:c1 {:
+    ArrayList<Comm> list = new ArrayList();
+    list.add(c1);
+    list.add(c2);
+    list.add(c3);
+    list.add(c4);
+
+    Double[] st_val = (Double[]) parser.stack(-4);
+    for(Comm cmd: list) {
+        if(cmd.getType().equals("M")){
+            if(cmd.getCode().equals(0)){
+                st_val[0] += cmd.getVal();
+            }
+            else{
+                st_val[1] -= cmd.getVal();
+            }
+            System.out.println("battery="+st_val[0]+" fuel="+st_val[1]);
+        }
+        else {
+            if(cmd.getCode().equals(0)){
+                for(Cons cn: cmd.getList()){
+                    Double res = cn.getDist() * cn.getUni();
+                    st_val[0] -= res;
+                    System.out.println("battery="+st_val[0]+" fuel="+st_val[1]);
+
+                }
+            }
+            else{
+                for(Cons cn: cmd.getList()){
+                    Double res = cn.getDist() * cn.getUni();
+                    st_val[1] -= res;
+                    System.out.println("battery="+st_val[0]+" fuel="+st_val[1]);
+                }
+            }
+        }
+    }
+:};
+
+command ::= mod:cmd PV {:
+    RESULT = cmd;
+:}
+|use:cmd PV {:
+    RESULT = cmd;
+:};
+
+mod ::= MOD type:cod exp:val  {:
+    Comm cmd = new Comm(cod, "M", null, val);
+    RESULT = cmd;
+:};
+
+use ::= USE type:cod DO cons_list:list PV DONE {:
+    Comm cmd = new Comm(cod, "U", list, 0.0);
+    RESULT = cmd;
+:};
+
+cons_list ::= cons_list:list PV cons:cn  {:
+    list.add(cn);
+    RESULT = list;
+:}
+|cons:cn {:
+    ArrayList<Cons> list = new ArrayList();
+    list.add(cn);
+    RESULT = list;
+:};
+
+cons ::= exp:dist KM exp:uni UNITSKM {:
+    Cons cn = new Cons(dist, uni);
+    RESULT = cn;
+:};
+
+type ::= BATTERY {:
+    RESULT = 0;
+:}
+|FUEL {:
+    RESULT = 1;
+:};
+
+exp ::= exp:e1 STAR exp:e2 {:
+    Double res = e1*e2;
+    RESULT = res;
+:}
+|exp:e1 PLUS exp:e2 {:
+    Double res = e1+e2;
+    RESULT = res;
+:}
+|max:val {:
+    RESULT = val;
+:}
+|DOUBLE:val {:
+    RESULT = val;
+:};
+
+max ::= MAX TA exp_list:list TC {:
+    Double max = 0.0;
+    for(Double val: list) {
+        if(val > max){
+            max = val;
+        }
+    }
+    RESULT = max;
+:};
+
+exp_list ::= exp_list:list V exp:val {:
+    list.add(val);
+    RESULT = list;
+:} 
+|exp:val {:
+    ArrayList<Double> list = new ArrayList();
+    list.add(val);
+    RESULT = list;
+:};

@@ -1,0 +1,193 @@
+import java_cup.runtime.*;
+import java.io.*;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
+
+init with {:
+    map = new HashMap<String, ArrayList<Food>>();
+:};
+
+parser code {:
+
+    HashMap<String, ArrayList<Food>> map = new HashMap();
+    
+    public Double computePrice(Ingredient ing, Integer num) {
+        ArrayList<Food> list = map.get(ing.getCat());
+        Double price = 0.0;
+        for(Food fo: list) {
+            if(ing.getName().equals(fo.getName())){
+                price = fo.getPrice() * ing.getQuan() * num;
+            }
+        }
+        return price;
+    }
+    
+    public class Food {
+        private String name;
+        private Double price;
+
+        Food(String name, Double price) {
+            this.name = name;
+            this.price = price;
+        }
+
+        public String getName() {
+            return this.name;
+        }
+
+        public Double getPrice() {
+            return this.price;
+        }
+    }
+
+    public class Ingredient {
+        private String cat;
+        private String name;
+        private Double quan;
+
+        Ingredient(String cat, String name, Double quan) {
+            this.cat = cat;
+            this.name = name;
+            this.quan = quan;
+        }
+
+        public String getCat() {
+            return this.cat;
+        }
+
+        public String getName() {
+            return this.name;
+        }
+
+        public Double getQuan() {
+            return this.quan;
+        }
+    }
+
+    public void report_error(String message, Object info) {
+        System.err.print("ERROR: Syntax error");
+        if (info instanceof Symbol)
+            if (((Symbol)info).left != -1){
+                int line = (((Symbol)info).left)+1;
+                int column = (((Symbol)info).right)+1;
+                System.err.print(" (linea "+line+", colonna "+column+"): ");
+            } else System.err.print(": ");
+        else System.err.print(": ");
+    }
+    public void syntax_error(Symbol cur_token){}
+
+    // ritorna actual symbol (tos = top of stack) [dalla teoria]
+    public Symbol getToken() {
+        return ((Symbol)stack.elementAt(tos));
+    }
+
+    // ritorna il semantic value del simbolo alla posizione pos [dalla teoria]
+    public Object stack(int pos) {
+        return (((Symbol)stack.elementAt(tos + pos)).value);
+    }
+
+    // Return the line number of actual symbol
+    public int getLine() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).left+1;
+        }else return -1;
+    }
+    // Return the column number of actual symbol
+    public int getColumn() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).right+1;
+        }else return -1;
+    }
+:};
+
+action code {:
+    //creazione di classi se serve raggruppare
+:};
+
+//Simboli da jflex
+terminal PV, V, P, DP, QA, QC, TOK1, TOK2, EUROKG, KG, SEP;
+terminal String STR;
+terminal Double DOUBLE;
+terminal Integer INT;
+//productions di cup
+non terminal prog, recipe_list, recipe_section, food_category, food_category_list, food_section, tok2s, header;
+non terminal Ingredient ingredient;
+non terminal ArrayList<Ingredient> ingredient_list;
+non terminal Food food;
+non terminal ArrayList<Food> food_list;
+
+//precedenze se servono
+
+start with prog;
+
+prog ::=  SEP food_section SEP recipe_section;
+
+/*header ::= TOK1 tok2s
+|tok2s TOK1
+|tok2s TOK1 tok2s;
+
+tok2s ::= tok2s TOK2 | TOK2 TOK2;*/
+
+food_section ::= food_category_list | /*empty*/;
+
+food_category_list ::= food_category_list food_category food_category| food_category food_category;
+
+food_category ::= STR:cat DP QA food_list:list QC PV {:
+    parser.map.put(cat, list);
+:};
+
+food_list ::= food_list:list V food:fo {:
+    list.add(fo);
+    RESULT = list;
+:}
+| food:fo {:
+    ArrayList<Food> list = new ArrayList();
+    list.add(fo);
+    RESULT = list;
+:};
+
+food ::= STR:name DP DOUBLE:price EUROKG {:
+    Food food = new Food(name, price);
+    RESULT = food;
+:};
+
+recipe_section ::= recipe_list | /*empty*/;
+
+recipe_list ::= INT:num STR:name DP ingredient_list:list PV {:
+    System.out.println(name);
+    Double tot = 0.0;
+    for(Ingredient ing: list) {
+        Double price = computePrice(ing, num);
+        tot += price;
+        System.out.println(ing.getName()+" "+price+" EURO");
+    }
+    System.out.println("TOT: "+tot+" EURO");
+
+:}
+|INT:num STR:name ingredient_list:list PV {:
+    System.out.println(name);
+    Double tot = 0.0;
+    for(Ingredient ing: list) {
+        Double price = computePrice(ing, num);
+        tot += price;
+        System.out.println(ing.getName()+" "+price+" EURO");
+    }
+    System.out.println("TOT: "+tot+" EURO");
+
+:};
+
+ingredient_list ::= ingredient_list:list V ingredient:ing {:
+    list.add(ing);
+    RESULT = list;
+:}
+| ingredient:ing {:
+    ArrayList<Ingredient> list = new ArrayList();
+    list.add(ing);
+    RESULT = list;
+:};
+
+ingredient ::= STR:cat P STR:name DOUBLE:quan KG {:
+    Ingredient ing = new Ingredient(cat, name, quan);
+    RESULT = ing;
+:};
