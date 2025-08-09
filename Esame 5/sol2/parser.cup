@@ -1,0 +1,228 @@
+import java_cup.runtime.*;
+import java.io.*;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
+
+init with {:
+    height = 0;
+    speed = 0;
+:};
+
+parser code {:
+
+    Integer height = 0;
+    Integer speed = 0;
+
+    public void report_error(String message, Object info) {
+        System.err.print("ERROR: Syntax error");
+        if (info instanceof Symbol)
+            if (((Symbol)info).left != -1){
+                int line = (((Symbol)info).left)+1;
+                int column = (((Symbol)info).right)+1;
+                System.err.print(" (linea "+line+", colonna "+column+"): ");
+            } else System.err.print(": ");
+        else System.err.print(": ");
+    }
+    public void syntax_error(Symbol cur_token){}
+
+    // ritorna actual symbol (tos = top of stack) [dalla teoria]
+    public Symbol getToken() {
+        return ((Symbol)stack.elementAt(tos));
+    }
+
+    // ritorna il semantic value del simbolo alla posizione pos [dalla teoria]
+    public Object stack(int pos) {
+        return (((Symbol)stack.elementAt(tos + pos)).value);
+    }
+
+    // Return the line number of actual symbol
+    public int getLine() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).left+1;
+        }else return -1;
+    }
+    // Return the column number of actual symbol
+    public int getColumn() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).right+1;
+        }else return -1;
+    }
+:};
+
+action code {:
+    //creazione di classi se serve raggruppare
+:};
+
+//Simboli da jflex
+terminal PV, V, EQ, QA, QC, MAX, TOK1, TOK2, TOK3, IN, H, S, SUM, MUL, COND, UPDATE, DONE, SEP;
+terminal Integer INT;
+//productions di cup
+non terminal prog, cond, command, command_list, ini, simul_sec, tok2s, tok1s, toks, header;
+non terminal Integer exp, speed_ass, height_ass;
+non terminal Boolean comp;
+non terminal Integer[] ass;
+non terminal ArrayList<Integer[]> ass_list;
+
+precedence left SUM;
+precedence left MUL;
+
+start with prog;
+
+prog ::= header SEP simul_sec;
+
+header ::= TOK3
+|TOK3 TOK3
+|toks TOK3 toks
+|toks TOK3
+|TOK3 toks
+|toks TOK3 toks TOK3 toks 
+|TOK3 toks TOK3 toks
+|toks TOK3 TOK3 toks
+|toks TOK3 toks TOK3 
+|TOK3 toks TOK3 
+|toks TOK3 TOK3 
+|/*empty*/;
+
+toks ::= tok1s | tok2s;
+
+tok1s ::= tok1s TOK1 | TOK1;
+
+tok2s ::= tok2s TOK2 | TOK2;
+
+simul_sec ::= ini command_list;
+
+ini ::= IN height_ass:he V speed_ass:sp PV {:
+    parser.height = he;
+    parser.speed = sp;
+    System.out.println("HEIGHT "+parser.height);
+    System.out.println("SPEED "+parser.speed);
+
+:}
+|IN speed_ass:sp V height_ass:he PV{:
+    parser.height = he;
+    parser.speed = sp;
+    System.out.println("HEIGHT "+parser.height);
+    System.out.println("SPEED "+parser.speed);
+:}
+|IN speed_ass:sp PV {:
+    parser.height = 0;
+    parser.speed = sp;
+    System.out.println("HEIGHT "+parser.height);
+    System.out.println("SPEED "+parser.speed);
+:}
+|IN height_ass:he PV {:
+    parser.height = he;
+    parser.speed = 0;
+    System.out.println("HEIGHT "+parser.height);
+    System.out.println("SPEED "+parser.speed);
+:}
+|/*empty*/ {:
+    parser.height = 0;
+    parser.speed = 0;
+    System.out.println("HEIGHT "+parser.height);
+    System.out.println("SPEED "+parser.speed);
+:};
+
+command_list ::= command_list command command 
+|command command command;
+
+command ::= height_ass:ex PV {:
+    parser.height = ex;
+    System.out.println("HEIGHT "+parser.height);
+
+:}
+|speed_ass:ex PV {:
+    parser.speed = ex;
+    System.out.println("SPEED "+parser.speed);
+:}
+|cond PV;
+
+cond ::= COND QA comp:cmp QC UPDATE ass_list:list PV DONE {:
+    if(cmp == true){
+        for(Integer[] i: list){
+            if(i[1].equals(0)){
+                System.out.println("HEIGHT "+i[0]);
+            }
+            else{
+                System.out.println("SPEED "+i[0]);
+            }
+        }
+    }
+:};
+
+ass_list ::= ass_list:list PV ass:ex {:
+    list.add(ex);
+    RESULT = list;
+:} 
+|ass:ex {:
+    ArrayList<Integer[]> list = new ArrayList();
+    list.add(ex);
+    RESULT = list;
+:};
+
+ass ::= height_ass:ex {:
+    Integer[] res = new Integer[2];
+    res[0] = ex;
+    res[1] = 0;
+    RESULT = res;
+:}
+|speed_ass:ex {:
+    Integer[] res = new Integer[2];
+    res[0] = ex;
+    res[1] = 1;
+    RESULT = res;
+:};
+
+comp ::= exp:e1 MAX exp:e2 {:
+    Boolean res = true;
+    if(e1 > e2){
+        res = true;
+    }
+    else {
+        res = false;
+    }
+    RESULT = res;
+:}
+|exp:e1 EQ exp:e2 {:
+    Boolean res = true;
+    if(e1.equals(e2)){
+        res = true;
+    }
+    else {
+        res = false;
+    }
+    RESULT = res;
+:}
+|/*empty*/ {:
+    Boolean res = true;
+    RESULT = res;
+:};
+
+height_ass ::= H EQ exp:ex {:
+    RESULT = ex;
+:};
+
+speed_ass ::= S EQ exp:ex {:
+    RESULT = ex;
+:};
+
+exp ::= exp:e1 SUM exp:e2 {:
+    Integer res = e1+e2;
+    RESULT = res;
+:}
+|exp:e1 MUL exp:e2 {:
+    Integer res = e1*e2;
+    RESULT = res;
+:}
+|H {:
+    Integer he = parser.height;
+    RESULT = he;
+:}
+|S {:
+    Integer sp = parser.speed;
+    RESULT = sp;
+:}
+|INT:val {:
+    RESULT = val;
+:};

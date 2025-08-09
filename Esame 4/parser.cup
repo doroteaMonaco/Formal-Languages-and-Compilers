@@ -1,0 +1,249 @@
+import java_cup.runtime.*;
+import java.io.*;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
+
+init with {:
+    map = new HashMap<String, ArrayList<Material>>();
+:};
+
+parser code {:
+
+    HashMap<String, ArrayList<Material>> map = new HashMap<String, ArrayList<Material>>();
+
+    public String getLess(ArrayList<Material> list) {
+        String less = new String();
+        Double min = list.get(0).getPrice();
+        for(Material mat: list) {
+            if (mat.getPrice() < min) {
+                min = mat.getPrice();
+                less = mat.getName();
+            }
+        }
+        return less;
+    }
+
+    public String getMore(ArrayList<Material> list) {
+        String more = new String();
+        Double max = list.get(0).getPrice();
+        for(Material mat: list) {
+            if (mat.getPrice() > max) {
+                max = mat.getPrice();
+                more = mat.getName();
+            }
+        }
+        return more;
+    }
+
+    public Double computePrice(String type, Comp com, Double tax) {
+        ArrayList<Material> list = map.get(type);
+        Double price = 0.0;
+
+        for(Material mat: list) {
+            if(mat.getName().equals(com.getName())){
+                price = (com.getQuan() * mat.getPrice()) + tax;
+            }
+        }
+        return price;
+    }
+
+    public class Material {
+        private String name;
+        private Double price;
+
+        Material(String name, Double price) {
+            this.name = name;
+            this.price = price;
+        }
+
+        public String getName() {
+            return this.name;
+        }
+
+        public Double getPrice() {
+            return this.price;
+        }
+    }
+
+    public class Comp {
+        private String name;
+        private Integer quan;
+
+        Comp(String name, Integer quan) {
+            this.name = name;
+            this.quan = quan;
+        }
+
+        public String getName() {
+            return this.name;
+        }
+
+        public Integer getQuan() {
+            return this.quan;
+        }
+    }
+
+    public class Elem {
+        private String type;
+        private ArrayList<Comp> list;
+
+        Elem(String type, ArrayList<Comp> list) {
+            this.type = type;
+            this.list = list;
+        }
+
+        public String getType() {
+            return this.type;
+        }
+
+        public ArrayList<Comp> getList() {
+            return this.list;
+        }
+    }
+
+    public void report_error(String message, Object info) {
+        System.err.print("ERROR: Syntax error");
+        if (info instanceof Symbol)
+            if (((Symbol)info).left != -1){
+                int line = (((Symbol)info).left)+1;
+                int column = (((Symbol)info).right)+1;
+                System.err.print(" (linea "+line+", colonna "+column+"): ");
+            } else System.err.print(": ");
+        else System.err.print(": ");
+    }
+    public void syntax_error(Symbol cur_token){}
+
+    // ritorna actual symbol (tos = top of stack) [dalla teoria]
+    public Symbol getToken() {
+        return ((Symbol)stack.elementAt(tos));
+    }
+
+    // ritorna il semantic value del simbolo alla posizione pos [dalla teoria]
+    public Object stack(int pos) {
+        return (((Symbol)stack.elementAt(tos + pos)).value);
+    }
+
+    // Return the line number of actual symbol
+    public int getLine() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).left+1;
+        }else return -1;
+    }
+    // Return the column number of actual symbol
+    public int getColumn() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).right+1;
+        }else return -1;
+    }
+:};
+
+action code {:
+    //creazione di classi se serve raggruppare
+:};
+
+//Simboli da jflex
+terminal PV, V, DP, GA, GC, TOK1, TOK2, EUROKG, EURO, KG, SEP;
+terminal Double DOUBLE;
+terminal Integer INT;
+terminal String STR;
+//productions di cup
+non terminal prog, product, product_list, product_section, material_type, material_type_list, warehouse_section, tok1se, tok1e, sep2, tok2s, tok1s, sep1, header;
+non terminal Comp component;
+non terminal ArrayList<Comp> component_list;
+non terminal Elem element;
+non terminal ArrayList<Elem> element_list;
+non terminal Material material;
+non terminal ArrayList<Material> material_list;
+//precedenze se servono
+
+start with prog;
+
+prog ::=  header SEP warehouse_section SEP product_section;
+
+header ::= sep1 | sep2;
+
+sep1 ::= tok1s tok2s;
+
+tok1s ::= tok1s TOK1 TOK1 | TOK1 TOK1 TOK1 TOK1;
+
+tok2s ::= TOK2 TOK2 TOK2
+|TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2
+|TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2;
+
+sep2 ::= TOK2 tok1e TOK2 tok1e;
+
+tok1e ::= tok1se | /*empty*/;
+
+tok1se ::= tok1se TOK1 | TOK1;
+
+warehouse_section ::= material_type_list;
+
+material_type_list ::= material_type_list material_type material_type | material_type material_type;
+
+material_type ::= GA material_list:list GC STR:type PV {:
+    parser.map.put(type, list);
+    String less = getLess(list);
+    String more = getMore(list);
+    System.out.println(type+": less: "+less+", more: "+more);
+:};
+
+material_list ::= material_list:list V material:mat {:
+    list.add(mat);
+    RESULT = list;
+:} 
+| material:mat{:
+    ArrayList<Material> list = new ArrayList();
+    list.add(mat);
+    RESULT = list;
+:};
+
+material ::= STR:name DOUBLE:price EUROKG {:
+    Material mat = new Material(name, price);
+    RESULT = mat;
+:};
+
+product_section ::= product_list | /*empty*/;
+
+product_list ::= product_list product | product;
+
+product ::= DOUBLE:tax EURO STR:name DP element_list:list PV {:
+    Double price = 0.0;
+    System.out.println(name);
+    for(Elem el: list) {
+        for(Comp com: el.getList()) {
+            price = computePrice(el.getType(), com, tax);
+            System.out.println(com.getName()+ price + "euro");
+        }
+    }
+:};
+
+element_list ::= element_list:list V element:el {:
+    list.add(el);
+    RESULT = list;
+:}
+| element:el{:
+    ArrayList<Elem> list = new ArrayList();
+    list.add(el);
+    RESULT = list;
+:};
+
+element ::= STR:type GA component_list:list GC{:
+    Elem el = new Elem(type, list);
+    RESULT = el;
+:};
+
+component_list ::= component_list:list V component:comp {:
+    list.add(comp);
+    RESULT = list;
+:} 
+| component:comp{:
+    ArrayList<Comp> list = new ArrayList();
+    list.add(comp);
+    RESULT = list;
+:};
+
+component ::= STR:name INT:quantity KG {:
+    Comp comp = new Comp(name, quantity);
+    RESULT = comp;
+:};

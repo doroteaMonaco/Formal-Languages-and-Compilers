@@ -1,0 +1,203 @@
+import java_cup.runtime.*;
+import java.io.*;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
+
+init with {:
+    map = new HashMap<String, Boolean>();
+:};
+
+parser code {:
+
+    HashMap<String, Boolean> map = new HashMap<String, Boolean>();
+
+    public Boolean computeExp(Boolean ex1, Comp com) {
+        Boolean res = true;
+        if (com.getOp().equals("AND")){
+            res = ex1 && (com.getBool());
+        }
+        else {
+            res = ex1 || (com.getBool());
+        }
+
+        return res;
+    }
+
+    public class Comp {
+        private Boolean bool;
+        private String str;
+        private String op;
+
+        Comp(Boolean bool, String str, String op) {
+            this.bool = bool;
+            this.str = str;
+            this.op = op;
+        }
+
+        public Boolean getBool() {
+            return this.bool;
+        }
+
+        public String getStr() {
+            return this.str;
+        }
+
+        public String getOp() {
+            return this.op;
+        }
+    }
+
+    public void report_error(String message, Object info) {
+        System.err.print("ERROR: Syntax error");
+        if (info instanceof Symbol)
+            if (((Symbol)info).left != -1){
+                int line = (((Symbol)info).left)+1;
+                int column = (((Symbol)info).right)+1;
+                System.err.print(" (linea "+line+", colonna "+column+"): ");
+            } else System.err.print(": ");
+        else System.err.print(": ");
+    }
+    public void syntax_error(Symbol cur_token){}
+
+    // ritorna actual symbol (tos = top of stack) [dalla teoria]
+    public Symbol getToken() {
+        return ((Symbol)stack.elementAt(tos));
+    }
+
+    // ritorna il semantic value del simbolo alla posizione pos [dalla teoria]
+    public Object stack(int pos) {
+        return (((Symbol)stack.elementAt(tos + pos)).value);
+    }
+
+    // Return the line number of actual symbol
+    public int getLine() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).left+1;
+        }else return -1;
+    }
+    // Return the column number of actual symbol
+    public int getColumn() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).right+1;
+        }else return -1;
+    }
+:};
+
+action code {:
+    //creazione di classi se serve raggruppare
+:};
+
+//Simboli da jflex
+terminal PV, V, EQ, AND, OR, NOT, TA, TC, TOK1, TOK2, TOK3, ANDS, ORS, T, F, IF, FI, PRINT, DO, DONE, SEP;
+terminal String STR, VAR;
+//productions di cup
+non terminal prog, if, ass, command, command_list, execution_section, tok12, tok12e, seq2, tok13, tok2s, seq1, header;
+non terminal Boolean operand, bool_exp;
+non terminal String print;
+non terminal Comp comp;
+non terminal ArrayList<Comp> list_comp;
+//precedenze se servono
+precedence left AND, OR;
+precedence left NOT;
+
+start with prog;
+
+prog ::= header SEP execution_section;
+
+header ::= seq1 | seq2;
+
+seq1 ::= tok2s tok13 tok13 
+|tok2s tok13 tok13 tok13
+|tok2s tok13 tok13 tok13 tok13 tok13 tok13 tok13 tok13 tok13;
+
+tok13 ::= TOK1 | TOK3;
+
+tok2s ::= tok2s TOK2 TOK2 | TOK2 TOK2 TOK2;
+
+seq2 ::= TOK3 tok12e TOK3 tok12e TOK3 tok12e;
+
+tok12e ::= tok12 | /*empty*/;
+
+tok12 ::= tok12 TOK1 | tok12 TOK2 | TOK1 | TOK2;
+
+execution_section ::= command_list;
+
+command_list ::= command_list command command | command command command command command;
+
+command ::= ass | if;
+
+ass ::= VAR:val EQ bool_exp:ex PV{:
+    parser.map.put(val, ex);
+:};
+
+if ::= IF bool_exp:ex1 list_comp:list FI {:
+    for(Comp com: list){
+        Boolean res = computeExp(ex1, com);
+        if(res == true){
+            System.out.println(com.getStr());
+        }
+    }
+:};
+
+list_comp ::= list_comp:list comp:com {:
+    list.add(com);
+    RESULT = list;
+:}
+| comp:com {:
+    ArrayList<Comp> list = new ArrayList();
+    list.add(com);
+    RESULT = list;
+:};
+
+comp ::= ORS bool_exp:ex2 DO print:str DONE {:
+    Comp comp = new Comp(ex2, str, "OR");
+    RESULT = comp;
+:}
+|ANDS bool_exp:ex2 DO print:str DONE {:
+    Comp comp = new Comp(ex2, str, "AND");
+    RESULT = comp;
+:};
+
+print ::= PRINT STR:str PV {:
+    RESULT = str;
+:};
+
+bool_exp ::= bool_exp:op1 AND bool_exp:op2 {:
+    Boolean res = op1&&op2;
+    RESULT = res;
+:}
+|bool_exp:op1 OR bool_exp:op2 {:
+    Boolean res = op1||op2;
+    RESULT = res;
+:}
+|NOT bool_exp:op {:
+    Boolean res = !op;
+    RESULT = res;
+:}
+|TA bool_exp:op1 AND bool_exp:op2 TC {:
+    Boolean res = op1&&op2;
+    RESULT = res;
+:}
+|TA bool_exp:op1 OR bool_exp:op2 TC {:
+    Boolean res = op1||op2;
+    RESULT = res;
+:}
+|TA NOT bool_exp:op TC {:
+    Boolean res = !op;
+    RESULT = res;
+:}
+|operand:op {:
+    RESULT = op;
+:};
+
+operand ::= T {:
+    RESULT = (Boolean) true;
+:}
+|F {:
+    RESULT = (Boolean) false;
+:}
+|VAR:var {:
+    Boolean val = parser.map.get(var);
+    RESULT = val;
+:};

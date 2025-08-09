@@ -1,0 +1,240 @@
+import java_cup.runtime.*;
+import java.io.*;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
+
+init with {:
+    map = new HashMap<String, ArrayList<Material>>();
+:};
+
+parser code {:
+
+    HashMap<String, ArrayList<Material>> map = new HashMap();
+
+    public class Material {
+        private String name;
+        private Double cost;
+
+        Material(String name, Double cost) {
+            this.name = name;
+            this.cost =  cost;
+        }
+
+        public String getName() {
+            return this.name;
+        }
+
+        public Double getCost() {
+            return this.cost;
+        }
+    }
+
+    public class Comp {
+        private String name;
+        private Integer quan;
+
+        Comp(String name, Integer quan) {
+            this.name = name;
+            this.quan = quan;
+        }
+
+        public String getName() {
+            return this.name;
+        }
+
+        public Integer getQuan() {
+            return this.quan;
+        }
+    }
+
+    public class Elem {
+        private String name;
+        private ArrayList<Comp> list;
+
+        Elem(String name, ArrayList<Comp> list) {
+            this.name = name;
+            this.list = list;
+        }
+
+        public String getName() {
+            return this.name;
+        }
+
+        public ArrayList<Comp> getList() {
+            return this.list;
+        }
+    }
+
+    public void report_error(String message, Object info) {
+        System.err.print("ERROR: Syntax error");
+        if (info instanceof Symbol)
+            if (((Symbol)info).left != -1){
+                int line = (((Symbol)info).left)+1;
+                int column = (((Symbol)info).right)+1;
+                System.err.print(" (linea "+line+", colonna "+column+"): ");
+            } else System.err.print(": ");
+        else System.err.print(": ");
+    }
+    public void syntax_error(Symbol cur_token){}
+
+    // ritorna actual symbol (tos = top of stack) [dalla teoria]
+    public Symbol getToken() {
+        return ((Symbol)stack.elementAt(tos));
+    }
+
+    // ritorna il semantic value del simbolo alla posizione pos [dalla teoria]
+    public Object stack(int pos) {
+        return (((Symbol)stack.elementAt(tos + pos)).value);
+    }
+
+    // Return the line number of actual symbol
+    public int getLine() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).left+1;
+        }else return -1;
+    }
+    // Return the column number of actual symbol
+    public int getColumn() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).right+1;
+        }else return -1;
+    }
+:};
+
+action code {:
+:};
+
+terminal PV, V, DP, GA, GC, TOK1, TOK2, EUROKG, EURO, KG, SEP;
+terminal Integer INT;
+terminal String STR;
+terminal Double DOUBLE;
+
+non terminal prog, product, product_list, material_type, material_type_list, tok1s, seq2, tok11, tok12, seq1, header;
+non terminal Comp comp;
+non terminal ArrayList<Comp> component_list;
+non terminal Elem element;
+non terminal ArrayList<Elem> element_list;
+non terminal Material material;
+non terminal ArrayList<Material> material_list;
+//precedenze
+
+start with prog;
+
+prog ::= header SEP material_type_list SEP product_list
+|header SEP material_type_list;
+
+header ::= seq1
+|seq2;
+
+seq1 ::= tok11 tok12;
+
+tok11 ::= tok11 TOK1 TOK1
+|TOK1 TOK1 TOK1 TOK1;
+
+tok12 ::= TOK2 TOK2 TOK2
+|TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2
+|TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2;
+
+seq2 ::= TOK2 TOK2
+|TOK2 TOK2 TOK2
+|TOK2 tok1s TOK2 tok1s
+|TOK2 tok1s TOK2
+|TOK2 TOK2 tok1s
+|TOK2 tok1s TOK2 tok1s TOK2 tok1s
+|TOK2 tok1s TOK2 tok1s TOK2 
+|TOK2 TOK2 tok1s TOK2 tok1s
+|TOK2 tok1s TOK2 TOK2 tok1s
+|TOK2 TOK2 tok1s TOK2 
+|TOK2 tok1s TOK2 TOK2;
+
+tok1s ::= tok1s TOK1
+|TOK1;
+
+material_type_list ::= material_type_list material_type material_type
+|material_type material_type;
+
+material_type ::= GA material_list:list GC STR:name PV {:
+    parser.map.put(name, list);
+    String less = new String();
+    String more = new String();
+    Double min = list.get(0).getCost();
+    Double max = 0.0;
+    for(Material mat: list) {
+        if(mat.getCost() < min) {
+            min = mat.getCost();
+            less = mat.getName();
+        }
+        if(mat.getCost() > max) {
+            max = mat.getCost();
+            more = mat.getName();
+        }
+    }
+    System.out.println(name+": less: "+less+", more: "+more);
+:};
+
+material_list ::= material_list:list V material:mat {:
+    list.add(mat);
+    RESULT = list;
+:}
+|material:mat {:
+    ArrayList<Material> list = new ArrayList();
+    list.add(mat);
+    RESULT = list;
+:};
+
+material ::= STR:name DOUBLE:cost EUROKG {:
+    Material mat = new Material(name, cost);
+    RESULT = mat;
+:};
+
+product_list ::= product_list product 
+|product;
+
+product ::= DOUBLE:tax EURO STR:type DP element_list:list PV {:
+    System.out.println(type);
+    for(Elem el: list) {
+        ArrayList<Material> matL = parser.map.get(el.getName());
+        for(Comp cmp: el.getList()) {
+            Double cost = 0.0;
+            for(Material mat: matL) {
+                if(cmp.getName().equals(mat.getName())) {
+                    cost = mat.getCost();
+                    break;
+                }
+            }
+            Double res = tax + (cost * cmp.getQuan());
+            System.out.println(cmp.getName()+" "+res+" euro");
+        }
+    }
+:};
+
+element_list ::= element_list:list V element:el {:
+    list.add(el);
+    RESULT = list;
+:}
+|element:el {:
+    ArrayList<Elem> list = new ArrayList();
+    list.add(el);
+    RESULT = list;
+:};
+
+element ::= STR:name GA component_list:list GC {:
+    Elem el = new Elem(name, list);
+    RESULT = el;
+:};
+
+component_list ::= component_list:list V comp:cmp {:
+    list.add(cmp);
+    RESULT = list;
+:} 
+|comp:cmp {:
+    ArrayList<Comp> list = new ArrayList();
+    list.add(cmp);
+    RESULT = list;
+:};
+
+comp ::= STR:name INT:quan KG {:
+    Comp cmp = new Comp(name, quan);
+    RESULT = cmp;
+:};
