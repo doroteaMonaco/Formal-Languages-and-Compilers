@@ -1,0 +1,135 @@
+import java_cup.runtime.*;
+import java.io.*;
+import java.util.HashMap;
+import java.util.Map;
+
+
+init with {:
+    HashMap<String, HashMap<String, Integer>> map_type = new HashMap<>();
+    HashMap<String, Integer> map_score = new HashMap<>();
+:};
+
+
+parser code {:
+
+    public HashMap<String, HashMap<String, Integer>> map_type;
+    public HashMap<String, Integer> map_score;
+
+    public Integer checkOp(String op){
+        Integer val = 0;
+        if(op == "*"){
+            val = 3;
+        }
+        else if (op == "+"){
+            val = 2;
+        }
+        else if (op == "/"){
+            val = 1;
+        }
+        else if (op == "-"){
+            val = 0;
+        }
+        else {
+            System.out.println("Unrecognized symbol");
+        }
+        return val;
+    }
+
+    public Integer checkMapType(String type, String att1, String att2, Integer op1, Integer op2){
+        Integer sum = 0;
+        Integer prod1 = 0;
+        Integer prod2 = 0;
+        for (Map.Entry<String, HashMap<String, Integer>> entry : map_type.entrySet()) {
+            if (entry.getKey().equals(type)) {
+                HashMap<String, Integer> attributes = entry.getValue();
+                for (Map.Entry<String, Integer> en : attributes.entrySet()) {
+                    if (en.getKey().equals(att1)) {
+                        prod1 = op1 * en.getValue();
+                    } else if (en.getKey().equals(att2)) {
+                        prod2 = op2 * en.getValue();
+                    }
+                }       
+                sum = prod1 + prod2;
+            }
+        }
+        return sum;
+    }
+
+    public void report_error(String message, Object info) {
+        System.err.print("ERROR: Syntax error");
+        if (info instanceof Symbol)
+            if (((Symbol)info).left != -1){
+                int line = (((Symbol)info).left)+1;
+                int column = (((Symbol)info).right)+1;
+                System.err.print(" (linea "+line+", colonna "+column+"): ");
+            } else System.err.print(": ");
+        else System.err.print(": ");
+    }
+    public void syntax_error(Symbol cur_token){}
+
+    public Symbol getToken() {
+        return ((Symbol)stack.elementAt(tos));
+    }
+
+    public Object stack(int pos) {
+        return (((Symbol)stack.elementAt(tos + pos)).value);
+    }
+
+    public int getLine() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).left+1;
+        }else return -1;
+    }
+    public int getColumn() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).right+1;
+        }else return -1;
+    }
+:};
+
+
+action code {:
+:}
+
+
+terminal TA, TC, DP, V, ARROW, EQ, PV, P;
+terminal String TYPE, ATTRIBUTE, NAME, VALUE;
+terminal Integer INT;
+
+non terminal prog;
+non terminal prod_type, prod_type_list, products, products_list;
+
+start with prog;
+
+prog ::= prod_type_list P products_list {:
+    System.out.println("Achieved scores");
+    for (Map.Entry<String, Integer> entry: map_score.entrySet()) {
+        System.out.println(entry.getKey() + "," + entry.getValue());
+    }
+:};
+
+products_list ::= products_list products PV | /*empty*/;
+
+products ::= TYPE:t DP VALUE:v1 ATTRIBUTE:a1 V VALUE:v2 ATTRIBUTE:a2 EQ NAME:n {:
+    Integer op1 = checkOp(v1);
+    Integer op2 = checkOp(v2);
+    Integer score = checkMapType(t, a1, a2, op1, op2);
+    if(!map_score.containsKey(n)) {
+        map_score.put(n, score);
+    }
+    else {
+        Integer actual_score = map_score.get(n);
+        map_score.put(n, actual_score + score);
+    }
+:};
+
+prod_type_list ::= prod_type_list prod_type | /*empty*/;
+
+prod_type ::= TA ATTRIBUTE:a DP INT:a1 V ATTRIBUTE:b DP INT:b1 TC ARROW TYPE:t {:
+    if(!map_type.containsKey(t)){
+        HashMap<String, Integer> m1 = new HashMap<>();
+        m1.put(a, a1);
+        m1.put(b, b1);
+        map_type.put(t, m1);
+    }
+:};

@@ -1,0 +1,106 @@
+import java_cup.runtime.*;
+
+parser code {:
+    public void report_error(String message, Object info) {
+        System.err.print("ERROR: Syntax error");
+        if (info instanceof Symbol)
+            if (((Symbol)info).left != -1){
+                int line = (((Symbol)info).left)+1;
+                int column = (((Symbol)info).right)+1;
+                System.err.print(" (linea "+line+", colonna "+column+"): ");
+            } else System.err.print(": ");
+        else System.err.print(": ");
+    }
+:};
+
+// Terminal tokens
+terminal INT, DOUBLE, ID;
+terminal PRINT, IF, WHILE, THEN, ELSE;
+terminal RO, RC, BO, BC, SC, SO, S;
+terminal PLUS, MINUS, STAR, DIV;
+terminal MIN, MAJ, MIN_EQ, MAJ_EQ, EQ;
+terminal AND, OR, NOT;
+terminal INT_TYPE, DOUBLE_TYPE;
+terminal EQ_MAJ;
+terminal CM;
+terminal EQ_MIN;
+
+// Non terminal tokens
+non terminal prog;
+non terminal declarations;
+non terminal declaration;
+non terminal statements;
+non terminal statement;
+non terminal expression;
+non terminal condition;
+non terminal list_id;
+non terminal list_vec;
+
+// Precedence rules
+precedence left OR;
+precedence left AND;
+precedence nonassoc EQ, MIN, MAJ, MIN_EQ, MAJ_EQ;
+precedence left PLUS, MINUS;
+precedence left STAR, DIV;
+precedence right NOT;
+precedence right THEN;
+precedence left ELSE;
+//////////////////////////////////////
+// Grammar start
+//////////////////////////////////////
+
+start with prog;
+
+prog ::= declarations statements;
+
+declarations ::= declarations declaration
+               | declaration;
+
+declaration ::= INT_TYPE list_id S
+              | DOUBLE_TYPE list_id S
+              | INT_TYPE list_vec S
+              | DOUBLE_TYPE list_vec S | error {: report_error("Error in declaration", $1); :};
+
+list_id ::= list_id CM ID | ID;
+
+list_vec ::= list_vec CM ID SO INT SC | ID SO INT SC | ID SO error {: report_error("Error in vector", $3)} | ID SO error {: report_error("Error in vector", $3)} SC;
+
+statements ::= statements statement
+             | statement;
+
+statement ::= PRINT RO expression RC S
+            | PRINT error {: report_error("Error in PRINT statement", $1); :}
+            | ID EQ expression S
+            | ID EQ error {: report_error("Error in assignment", $3); :} 
+            | ID SO expression SC EQ expression S
+            | WHILE RO condition RC BO statements BC
+            | WHILE RO error {: report_error("Error in WHILE assignment regarding ( or )", $3); :} RC BO statements BC
+            | WHILE error {: report_error("Error in WHILE statement", $1); :}
+            | IF RO condition RC BO statements BC error {: report_error("Error in IF statement, ELSE EXPECTED", $8); :}
+            | IF error {: report_error("Error in IF statement", $1); :}
+            | IF RO condition RC BO statements BC ELSE BO statement BC
+            | PRINT RO expression RC error {: report_error("Missing ';' after PRINT statement", $4); :}
+            | ID EQ expression error {: report_error("Missing ';' after assignment statement", $3); :}
+            | ID SO expression SC EQ expression error {: report_error("Missing ';' after vector assignment statement", $5); :}
+            | error {: report_error("Error in statement", $1); :};
+
+expression ::= expression PLUS expression
+             | expression MINUS expression
+             | expression STAR expression
+             | expression DIV expression
+             | ID
+             | INT
+             | DOUBLE
+             | ID SO expression SC
+             | MINUS INT
+             | MINUS DOUBLE
+             | error {: report_error("Error in expression", $1); :};
+
+condition ::= condition OR condition
+            | condition AND condition
+            | NOT condition
+            | expression EQ expression
+            | expression MIN expression
+            | expression MAJ expression
+            | expression MIN_EQ expression
+            | expression MAJ_EQ expression;

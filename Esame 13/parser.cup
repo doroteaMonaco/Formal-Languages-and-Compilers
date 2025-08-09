@@ -1,0 +1,200 @@
+import java_cup.runtime.*;
+import java.io.*;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
+
+init with {:
+    map = new HashMap<String, Double>();
+:};
+
+parser code {:
+
+    HashMap<String, Double> map = new HashMap();
+
+    public class Adv {
+        private String user;
+        private Integer time;
+        private Double off;
+
+        Adv(String user, Integer time, Double off) {
+            this.user = user;
+            this.time = time;
+            this.off = off;
+        }
+
+        public String getUser() {
+            return this.user;
+        }
+
+        public Integer getTime() {
+            return this.time;
+        }
+
+        public Double getOff() {
+            return this.off;
+        }
+    }
+
+    public class User {
+        private String user;
+        private Double money;
+
+        User(String user, Double money) {
+            this.user = user;
+            this.money = money;
+        }
+
+        public String getUser() {
+            return this.user;
+        }
+
+        public Double getMoney() {
+            return this.money;
+        }
+    }
+
+    public void report_error(String message, Object info) {
+        System.err.print("ERROR: Syntax error");
+        if (info instanceof Symbol)
+            if (((Symbol)info).left != -1){
+                int line = (((Symbol)info).left)+1;
+                int column = (((Symbol)info).right)+1;
+                System.err.print(" (linea "+line+", colonna "+column+"): ");
+            } else System.err.print(": ");
+        else System.err.print(": ");
+    }
+    public void syntax_error(Symbol cur_token){}
+
+    // ritorna actual symbol (tos = top of stack) [dalla teoria]
+    public Symbol getToken() {
+        return ((Symbol)stack.elementAt(tos));
+    }
+
+    // ritorna il semantic value del simbolo alla posizione pos [dalla teoria]
+    public Object stack(int pos) {
+        return (((Symbol)stack.elementAt(tos + pos)).value);
+    }
+
+    // Return the line number of actual symbol
+    public int getLine() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).left+1;
+        }else return -1;
+    }
+    // Return the column number of actual symbol
+    public int getColumn() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).right+1;
+        }else return -1;
+    }
+:};
+
+action code {:
+    //creazione di classi se serve raggruppare
+:};
+
+terminal PV, V, DP, ARROW, TOK1, TOK2, AUC, MIN, STRINGS, SEP;
+terminal Integer INT;
+terminal String STR, USER;
+terminal Double DOUBLE;
+
+non terminal prog, auc, auction_list, auction_sec, curr, currency_sec, curr_list, tok1s, header;
+non terminal Adv advance;
+non terminal ArrayList<Adv> advance_list;
+non terminal User user;
+non terminal ArrayList<User> user_list;
+
+//precedenze
+
+start with prog;
+
+prog ::= header SEP currency_sec SEP auction_sec;
+
+header ::= tok1s TOK2 TOK2
+|tok1s TOK2 tok1s TOK2
+|tok1s TOK2 tok1s TOK2 tok1s
+|tok1s TOK2 TOK2 tok1s
+|TOK2 tok1s TOK2 tok1s
+|TOK2 TOK2 tok1s
+|TOK2 tok1s TOK2;
+
+tok1s ::= tok1s TOK1 
+|TOK1;
+
+currency_sec ::= curr_list;
+
+curr_list ::= curr_list curr 
+|curr curr curr;
+
+curr ::= DOUBLE:rate STRINGS STRINGS DP user_list:list PV{:
+    Double res = 0.0;
+    for(User us: list){
+        res = rate * us.getMoney();
+        parser.map.put(us.getUser(), res);
+    }
+:};
+
+user_list ::= user_list:list V user:us {:
+    list.add(us);
+    RESULT = list;
+:}
+|user:us {:
+    ArrayList<User> list = new ArrayList();
+    list.add(us);
+    RESULT = list;
+:};
+
+user ::= USER:code DOUBLE:money {:
+    User us = new User(code, money);
+    RESULT = us;
+:};
+
+auction_sec ::= auction_list;
+
+auction_list ::= auction_list auc auc 
+|auc auc;
+
+auc ::= AUC INT:num DP STR DP INT:time MIN ARROW advance_list:list PV {:
+    System.out.println("Auction "+num);
+    Double auc = 0.0;
+    Double max = 0.0;
+    String usermax = new String();
+    for(Adv adv: list){
+        Double money = parser.map.get(adv.getUser());
+        if(adv.getOff() > auc){
+            auc = adv.getOff();
+            if (auc > max) {
+                max = auc;
+                usermax = adv.getUser();
+            }
+            System.out.println(adv.getUser()+": New auction price "+auc+" euro");
+        }
+        else {
+            System.out.println(adv.getUser()+": Error, advance less than the current auction value");
+            if(adv.getTime() > time){
+                System.out.println(adv.getUser()+": Error, advance out of time");
+            }
+        
+            if(money < auc) {
+                System.out.println(adv.getUser()+": Error, available only "+money+" euro");
+            }
+        }
+    }
+    System.out.println("Winner is "+usermax+" price "+max+" euro");
+:};
+
+advance_list ::= advance_list:list V advance:adv {:
+    list.add(adv);
+    RESULT = list;
+:}
+|advance:adv {:
+    ArrayList<Adv> list = new ArrayList();
+    list.add(adv);
+    RESULT = list;
+:};
+
+advance ::= USER:code DP INT:time DP DOUBLE:off STRINGS {:
+    Adv adv = new Adv(code, time, off);
+    RESULT = adv;
+:};

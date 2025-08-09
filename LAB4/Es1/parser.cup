@@ -1,0 +1,72 @@
+import java_cup.runtime.*;
+
+parser code {:
+    public void report_error(String message, Object info){
+        System.err.print("ERROR: Syntax error");
+        if (info instanceof Symbol){
+            if(((Symbol)info).left != -1){
+                int line = (((Symbol)info).left)+1;
+                int column = (((Symbol)info).right)+1;
+                System.err.print(" (linea "+line+", colonna "+column+"): "+message);
+            } else {
+                System.err.print(": "+message);
+            }
+        }
+        else {
+            System.err.print(": "+message);
+        }
+    }
+    public void syntax_error(Symbol s){
+        report_error("Syntax error", s);
+    }
+:};
+
+//Terminal tokens
+terminal TA, TC, V, P, R, I;
+terminal ATOM, VARIABLE;
+
+//Non terminal tokens
+non terminal prog;
+non terminal predicate;
+non terminal predicates;
+non terminal argument;
+non terminal arguments;
+non terminal functor;
+non terminal interrogation;
+non terminal rule;
+non terminal fact;
+non terminal element;
+non terminal elements;
+
+
+//Precedence rules
+
+
+//////////////////////////////////////////
+//Grammar start
+//////////////////////////////////////////
+
+start with prog;
+
+prog ::= elements interrogation elements
+        {: System.out.println("Program parsed successfully!"); :};
+
+elements ::= elements element | element;
+
+element ::= fact | rule;
+
+fact ::= predicate P;
+
+rule ::= predicate R predicates P;
+
+predicates ::= predicates V predicate | predicate;
+
+interrogation ::= I predicates P;
+
+functor ::= ATOM TA;
+
+predicate ::=  ATOM TA arguments TC | ATOM;
+
+arguments ::= arguments V argument |argument;
+
+argument ::= predicate | VARIABLE;

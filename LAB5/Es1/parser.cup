@@ -1,0 +1,142 @@
+import java.util.HashMap;
+
+init with {:
+    symbolTable = new HashMap();
+:};
+
+parser code {:
+    public HashMap symbolTable;
+
+    public void report_error(String message, Object info) {
+        System.err.print("ERROR: Syntax error");
+        if (info instanceof Symbol)
+            if (((Symbol)info).left != -1){
+                int line = (((Symbol)info).left)+1;
+                int column = (((Symbol)info).right)+1;
+                System.err.print(" (line "+line+", column "+column+"): ");
+            } else System.err.print(": ");
+        else System.err.print(": ");
+    }
+:};
+
+terminal Double SCALAR;
+terminal Character SCAVAR, VECVAR;
+terminal PLUS, MINUS, MUL, DIV, EQ, MULVEC, SEMICOLON, EXP, END, CM, QA, QC, UMINUS;
+
+non terminal Object prog, expr_list, expr, vect_print, scalar_print;
+non terminal Object vect_assign, scalar_assign;
+non terminal Double scalar_expr, scalar;
+non terminal Double[] vect_expr, vector;
+
+precedence left PLUS, MINUS;
+precedence left MULVEC;
+precedence left MUL, DIV;
+precedence left EXP;
+precedence left UMINUS;
+
+start with prog;
+
+prog ::= expr_list END {:
+    System.out.println("End of program");
+:};
+
+expr_list ::= expr_list SEMICOLON expr | expr;
+
+expr ::= scalar_assign | vect_assign | scalar_print| vect_print;
+
+scalar_print ::= scalar_expr:a {:
+    System.out.println("scalar: "+a);
+:};
+
+vect_print ::= vect_expr:a {:
+    System.out.println("vect: ["+a[0]+", "+a[1]+"]");
+:};
+
+scalar_expr ::= scalar_expr:a PLUS scalar_expr:b {:
+    RESULT = new Double(a + b);
+:}
+| scalar_expr:a MINUS scalar_expr:b {:
+    RESULT = new Double(a - b);
+:}
+| scalar_expr:a MUL scalar_expr:b {:
+    RESULT = new Double(a * b);
+:}
+| scalar_expr:a DIV scalar_expr:b {:
+    RESULT = new Double(a / b);
+:}
+| scalar_expr:a EXP scalar_expr:b {:
+    RESULT = new Double(Math.pow(a, b));
+:}
+| vect_expr:a MULVEC vect_expr:b {:
+    RESULT = new Double(a[0]*b[0]+a[1]*b[1]);
+:}
+| MINUS scalar_expr:a {:
+    RESULT = new Double(-a);
+:} %prec UMINUS
+| scalar:a {:
+    RESULT = new Double(a);
+:};
+
+vect_expr ::= vect_expr:a PLUS vect_expr:b {:
+    RESULT = new Double[2];
+    RESULT[0] = a[0] + b[0];
+    RESULT[1] = a[1] + b[1];
+:}
+| vect_expr:a MINUS vect_expr:b {:
+    RESULT = new Double[2];
+    RESULT[0] = a[0] - b[0];
+    RESULT[1] = a[1] - b[1];
+:}
+| scalar_expr:a MUL vect_expr:b {:
+    RESULT = new Double[2];
+    RESULT[0] = a * b[0];
+    RESULT[1] = a * b[1];
+:}
+| vect_expr:a MUL scalar_expr:b {:
+    RESULT = new Double[2];
+    RESULT[0] = a[0] * b;
+    RESULT[1] = a[1] * b;
+:}
+| vect_expr:a DIV scalar_expr:b {:
+    RESULT = new Double[2];
+    RESULT[0] = a[0] / b;
+    RESULT[1] = a[1] / b;
+:}
+| scalar_expr:a DIV vect_expr:b {:
+    RESULT = new Double[2];
+    RESULT[0] = a / b[0];
+    RESULT[1] = a / b[1];
+:}
+| vector:a {:
+    RESULT = a;
+:}
+| QA vect_expr:a QC {:
+    RESULT = a;
+:};
+
+scalar_assign ::= SCAVAR:a EQ scalar_expr:b SEMICOLON {:
+    parser.symbolTable.put(a, b);
+    System.out.println("assignment:"+a+"="+b);
+:};
+
+vect_assign ::= VECVAR:a EQ vect_expr:b SEMICOLON {:
+    parser.symbolTable.put(a, b);
+    System.out.println("assignment:"+a+"="+"["+b[0]+","+b[1]+"]");
+:};
+
+scalar ::= SCAVAR:a {:
+    RESULT = parser.symbolTable.get(a);
+:}
+| SCALAR:a {:
+    RESULT = new Double(a);
+:};
+
+vector ::= VECVAR:a {:
+    RESULT = (Double[]) parser.symbolTable.get(a);
+:}
+| QA scalar_expr:a CM scalar_expr:b QC {:
+    RESULT = new Double[2];
+    RESULT[0] = a;
+    RESULT[1] = b;
+:};
+
