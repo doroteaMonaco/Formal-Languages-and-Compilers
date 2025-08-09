@@ -1,0 +1,302 @@
+import java_cup.runtime.*;
+import java.io.*;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
+
+init with {:
+    map = new HashMap<String, ArrayList<Dest>>();
+:};
+
+parser code {:
+
+    HashMap<String, ArrayList<Dest>> map = new HashMap<String, ArrayList<Dest>>();
+
+    public Double computeTime(String p, String d, Time time) {
+        ArrayList<Dest> list = map.get(p);
+        Double val = 0.0;
+
+        for(Dest s: list) {
+            if (s.getName().equals(d)){
+                val = s.getDist();
+            }
+        }
+
+        Double res = val * (time.getPerc()/100) / time.getVel();
+        return res;
+    }
+
+    public Double computeExpense(String p, String d, Exp e) {
+        ArrayList<Dest> list = map.get(p);
+        Double val = 0.0;
+
+        for(Dest s: list) {
+            if (s.getName().equals(d)){
+                val = s.getDist();
+            }
+        }
+
+        Double res = (val * e.getPrice()) - e.getDisc();
+        return res;
+    }
+
+    public Double computeExtra(String p, String d, Exp e, Double disc) {
+        ArrayList<Dest> list = map.get(p);
+        Double val = 0.0;
+
+        for(Dest s: list) {
+            if (s.getName().equals(d)){
+                val = (Double) s.getDist();
+            }
+        }
+
+        Double res = (val * e.getPrice()) - e.getDisc() - disc;
+        return res;
+    }
+
+    public Double getMin(ArrayList<Double> list) {
+        Double min = list.get(0);
+        for(Double d: list) {
+            if(d < min) {
+                min = d;
+            }
+        }
+        return min;
+    }
+
+    public class Dest {
+        private String name;
+        private Double dist;
+
+        Dest(String name, Double dist) {
+            this.name = name;
+            this.dist = dist;
+        }
+
+        public String getName() {
+            return this.name;
+        }
+
+        public Double getDist() {
+            return this.dist;
+        }
+    }
+
+    public class Time {
+        private Double perc;
+        private Double vel;
+
+        Time(Double perc, Double vel) {
+            this.perc = perc;
+            this.vel = vel;
+        }
+
+        public Double getPerc() {
+            return this.perc;
+        }
+
+        public Double getVel() {
+            return this.vel;
+        }
+    }
+
+    public class Exp {
+        private String code;
+        private Double price;
+        private Double disc;
+
+        Exp(String code, Double price, Double disc) {
+            this.code = code;
+            this.price = price;
+            this.disc = disc;
+        }
+
+        public String getCode() {
+            return this.code;
+        }
+
+        public Double getPrice() {
+            return this.price;
+        }
+
+        public Double getDisc() {
+            return this.disc;
+        }
+    }
+
+    public void report_error(String message, Object info) {
+        System.err.print("ERROR: Syntax error");
+        if (info instanceof Symbol)
+            if (((Symbol)info).left != -1){
+                int line = (((Symbol)info).left)+1;
+                int column = (((Symbol)info).right)+1;
+                System.err.print(" (linea "+line+", colonna "+column+"): ");
+            } else System.err.print(": ");
+        else System.err.print(": ");
+    }
+    public void syntax_error(Symbol cur_token){}
+
+    // ritorna actual symbol (tos = top of stack) [dalla teoria]
+    public Symbol getToken() {
+        return ((Symbol)stack.elementAt(tos));
+    }
+
+    // ritorna il semantic value del simbolo alla posizione pos [dalla teoria]
+    public Object stack(int pos) {
+        return (((Symbol)stack.elementAt(tos + pos)).value);
+    }
+
+    // Return the line number of actual symbol
+    public int getLine() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).left+1;
+        }else return -1;
+    }
+    // Return the column number of actual symbol
+    public int getColumn() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).right+1;
+        }else return -1;
+    }
+:};
+
+action code {:
+    //creazione di classi se serve raggruppare
+:};
+
+//Simboli da jflex
+terminal PV, V, MINUS, DP, PERC, ARROW, TOK1, TOK2, TOK3, KM, COMPUTE, TO, TIME, EXPENSE, EXTRA, EURO, EUROKM, KMH, SEP, DISC;
+terminal Integer INT;
+terminal String STR;
+terminal Double DOUBLE;
+
+//productions di cup
+non terminal prog, type, compute, compute_list, distance, distance_list, command_section, tok3s, header;
+non terminal Double disc, exp;
+non terminal Exp expense;
+non terminal ArrayList<Exp> expense_list;
+non terminal Time time;
+non terminal ArrayList<Time> time_list;
+non terminal Dest destination;
+non terminal ArrayList<Dest> destination_list;
+//precedenze se servono
+
+start with prog;
+
+prog ::=  SEP command_section;
+
+//header ::= TOK1 tok3s TOK2 TOK1 tok3s;
+
+//tok3s ::= tok3s TOK3 | TOK3;
+
+command_section ::= distance_list compute_list
+|distance_list;
+
+distance_list ::= distance_list distance distance | distance distance distance;
+
+distance ::= STR:name ARROW destination_list:list PV {:
+    parser.map.put(name, list);
+:};
+
+destination_list ::= destination_list:list V destination:d {:
+    list.add(d);
+    RESULT = list;
+:} 
+| destination:d {:
+    ArrayList<Dest> list = new ArrayList();
+    list.add(d);
+    RESULT = list;
+:};
+
+destination ::= STR:name DOUBLE:dist KM {:
+    Dest d = new Dest(name, dist);
+    RESULT = d;
+:};
+
+compute_list ::= compute_list compute compute| compute;
+
+compute ::= COMPUTE STR TO STR type;
+
+type ::= TIME DP time_list:list PV {:
+    String part = parser.stack(-6).toString();
+    String dest = parser.stack(-4).toString();
+    Integer count = 0;
+    Double sum = 0.0;
+    for(Time time: list){
+        Double price = computeTime(part, dest, time);
+        sum += price;
+        System.out.println(count + price);
+        count += 1;
+    }
+    System.out.println("TOT:" + sum);
+:}
+|EXPENSE DP expense_list:list PV {:
+    String part = parser.stack(-6).toString();
+    String dest = parser.stack(-4).toString();
+    ArrayList<Double> vet = new ArrayList();
+    for(Exp e: list){
+        Double price = computeExpense(part, dest, e);
+        vet.add(price);
+        System.out.println(e.getCode()+price);
+    }
+    Double min = getMin(vet);
+    System.out.println("MIN:" + min);
+:}
+|EXPENSE EXTRA DOUBLE:d DP expense_list:list PV{:
+    String part = parser.stack(-8).toString();
+    String dest = parser.stack(-6).toString();
+    ArrayList<Double> vet = new ArrayList();
+    for(Exp e: list){
+        Double price = computeExtra(part, dest, e, d);
+        vet.add(price);
+        System.out.println(e.getCode()+price);
+    }
+    Double min = getMin(vet);
+    System.out.println("MIN:" + min);
+:};
+
+time_list ::= time_list:list V time:time {:
+    list.add(time);
+    RESULT = list;
+:}
+| time:time {:
+    ArrayList<Time> list = new ArrayList();
+    list.add(time);
+    RESULT = list;
+:};
+
+time ::= INT:p PERC INT:v KMH {:
+    Time time = new Time(Double.parseDouble(p.toString()), Double.parseDouble(v.toString()));
+    RESULT = time;
+:};
+
+expense_list ::= expense_list:list V expense:e {:
+    list.add(e);
+    RESULT = list;
+:}
+| expense:e {:
+    ArrayList<Exp> list = new ArrayList();
+    list.add(e);
+    RESULT = list;
+:};
+
+expense ::= STR:s exp:e MINUS disc:d {:
+    Exp ex = new Exp(s, e, d);
+    RESULT = ex;
+:}
+|STR:s disc:d MINUS exp:e {:
+    Exp ex = new Exp(s, e, d);
+    RESULT = ex;
+:}
+|STR:s exp:e {:
+    Exp ex = new Exp(s, e, 0.0);
+    RESULT = ex;
+:};
+
+exp ::= DOUBLE:val EUROKM {:
+    RESULT = val;
+:};
+
+disc ::= DISC DOUBLE:price EURO {:
+    RESULT = price;
+:};

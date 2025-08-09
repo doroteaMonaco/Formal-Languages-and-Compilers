@@ -1,0 +1,277 @@
+import java_cup.runtime.*;
+import java.io.*;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
+
+init with {:
+    map = new HashMap<String, ArrayList<Speed>>();
+:};
+
+parser code {:
+
+    HashMap<String, ArrayList<Speed>> map = new HashMap<String, ArrayList<Speed>>();
+    
+    public class Speed {
+        private String sec;
+        private Integer spe;
+
+        Speed(String sec, Integer spe) {
+            this.sec = sec;
+            this.spe = spe;
+        }
+
+        public String getSection() {
+            return this.sec;
+        }
+
+        public Integer getSpeed() {
+            return this.spe;
+        }
+    }
+
+    public class Stat {
+        private String sec;
+        private Integer dist;
+
+        Stat(String sec, Integer dist) {
+            this.sec = sec;
+            this.dist = dist;
+        }
+
+        public String getSection() {
+            return this.sec;
+        }
+
+        public Integer getDist() {
+            return this.dist;
+        }
+    }
+
+    public class Part {
+        private Integer id;
+        private ArrayList<Stat> list;
+
+        Part(Integer id, ArrayList<Stat> list) {
+            this.id = id;
+            this.list = list;
+        }
+
+        public Integer getID() {
+            return this.id;
+        }
+
+        public ArrayList<Stat> getList() {
+            return this.list;
+        }
+    }
+
+    public Integer getMin(String car, ArrayList<String> list) {
+        ArrayList<Speed> slist = map.get(car);
+        Integer min = slist.get(0).getSpeed();
+
+        for(String str: list) {
+            for(Speed sp: slist) {
+                if(sp.getSection().equals(str)){
+                    if(sp.getSpeed() < min){
+                        min = sp.getSpeed();
+                    }
+                }
+            }
+        }
+        return min;
+    }
+
+    public Integer getMax(String car, ArrayList<String> list) {
+        ArrayList<Speed> slist = map.get(car);
+        Integer max = 0;
+
+        for(String str: list) {
+            for(Speed sp: slist) {
+                if(sp.getSection().equals(str)){
+                    if(sp.getSpeed() > max){
+                        max = sp.getSpeed();
+                    }
+                }
+            }
+        }
+        return max;
+    }
+
+    public Double computeTime(String car, Stat st) {
+        ArrayList<Speed> list = map.get(car);
+        Double time = 0.0;
+
+        for(Speed sp: list) {
+            if(sp.getSection().equals(st.getSection())) {
+                time = Double.parseDouble(st.getDist().toString()) / Double.parseDouble(sp.getSpeed().toString());
+            }
+        }
+        return time;
+    }
+    
+    public void report_error(String message, Object info) {
+        System.err.print("ERROR: Syntax error");
+        if (info instanceof Symbol)
+            if (((Symbol)info).left != -1){
+                int line = (((Symbol)info).left)+1;
+                int column = (((Symbol)info).right)+1;
+                System.err.print(" (linea "+line+", colonna "+column+"): ");
+            } else System.err.print(": ");
+        else System.err.print(": ");
+    }
+    public void syntax_error(Symbol cur_token){}
+
+    // ritorna actual symbol (tos = top of stack) [dalla teoria]
+    public Symbol getToken() {
+        return ((Symbol)stack.elementAt(tos));
+    }
+
+    // ritorna il semantic value del simbolo alla posizione pos [dalla teoria]
+    public Object stack(int pos) {
+        return (((Symbol)stack.elementAt(tos + pos)).value);
+    }
+
+    // Return the line number of actual symbol
+    public int getLine() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).left+1;
+        }else return -1;
+    }
+    // Return the column number of actual symbol
+    public int getColumn() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).right+1;
+        }else return -1;
+    }
+:};
+
+action code {:
+    //creazione di classi se serve raggruppare
+:};
+
+//Simboli da jflex
+terminal PV, V, BAR, DP, ARROW, EQ, TA, TC, GA, GC, TOK1, TOK2, TOK3, MS, PRINT, PART, M, SEP;
+terminal Integer INT;
+terminal String STR;
+
+//productions di cup
+non terminal prog, perf_list, perf, print, print_list, car, car_list, car_section, race_section, tok1s, header;
+non terminal Stat drive_stat;
+non terminal ArrayList<Stat> drive_stat_list;
+non terminal Part part;
+non terminal ArrayList<Part> part_list;
+non terminal ArrayList<String> section_list;
+non terminal Speed speed;
+non terminal ArrayList<Speed> speed_list;
+//precedenze se servono
+
+start with prog;
+
+prog ::= header SEP car_section SEP race_section;
+
+header ::= TOK2 TOK3
+|TOK3 TOK2
+|tok1s TOK2 tok1s TOK3 tok1s
+|tok1s TOK3 tok1s TOK2 tok1s
+|tok1s TOK2 tok1s TOK3 
+|tok1s TOK3 tok1s TOK2 
+|tok1s TOK2  TOK3 
+|tok1s TOK3  TOK2 
+|TOK2 tok1s TOK3 
+|TOK3 tok1s TOK2 
+|TOK2 tok1s TOK3 tok1s
+|TOK3 tok1s TOK2 tok1s;
+
+tok1s ::= tok1s TOK1 | TOK1;
+
+car_section ::= car_list;
+
+car_list ::= car_list car car | car car;
+
+car ::= STR:name GA speed_list:list GC {:
+    parser.map.put(name, list);
+:};
+
+speed_list ::= speed_list:list V speed:spe {:
+    list.add(spe);
+    RESULT = list;
+:} 
+| speed:spe {:
+    ArrayList<Speed> list = new ArrayList();
+    list.add(spe);
+    RESULT = list;
+:};
+
+speed ::= STR:sec EQ INT:spe MS {:
+    Speed sp = new Speed(sec, spe);
+    RESULT = sp;
+:};
+
+race_section ::= print_list perf_list | perf_list;
+
+print_list ::= print_list print | print;
+
+print ::= PRINT TA STR:name TC TA section_list:list TC PV {:
+    Integer min = getMin(name, list);
+    Integer max = getMax(name, list);
+    System.out.println("MIN: "+min+" MAX: "+max);
+:};
+
+section_list ::= section_list:list V STR:str {:
+    list.add(str);
+    RESULT = list;
+:}
+| STR:str {:
+    ArrayList<String> list = new ArrayList();
+    list.add(str);
+    RESULT = list;
+:};
+
+perf_list ::= perf_list perf | perf;
+
+perf ::= STR:name ARROW part_list:list PV {:
+    System.out.println(name);
+    Double totP = 0.0;
+    for(Part pt: list) {
+        Double totT = 0.0;
+        for(Stat st: pt.getList()) {
+            Double time = computeTime(name, st);
+            totT += time;
+        }
+        totP += totT;
+        System.out.println("PART"+pt.getID()+": "+totT+" s");
+    }
+    System.out.println("TOTAL: "+totP+" s");
+
+:};
+
+part_list ::= part_list:list BAR part:pt {:
+    list.add(pt);
+    RESULT = list;
+:}
+| part:pt {:
+    ArrayList<Part> list = new ArrayList();
+    list.add(pt);
+    RESULT = list;
+:};
+
+part ::= PART INT:n DP drive_stat_list:list {:
+    Part pt = new Part(n, list);
+    RESULT = pt;
+:};
+
+drive_stat_list ::= drive_stat_list:list V drive_stat:st {:
+    list.add(st);
+    RESULT = list;
+:} 
+| drive_stat:st {:
+    ArrayList<Stat> list = new ArrayList();
+    list.add(st);
+    RESULT = list;
+:};
+
+drive_stat ::= STR:sec INT:dist M {:
+    Stat st = new Stat(sec, dist);
+    RESULT = st;
+:};

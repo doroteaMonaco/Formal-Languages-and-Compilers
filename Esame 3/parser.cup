@@ -1,0 +1,197 @@
+import java_cup.runtime.*;
+import java.io.*;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
+
+init with {:
+    map = new HashMap<String, Integer>();
+:};
+
+parser code {:
+
+    HashMap<String, Integer> map = new HashMap<String, Integer>();
+
+    public class Print {
+        private Integer val;
+        private ArrayList<Integer> list;
+
+        Print(Integer val, ArrayList<Integer> list) {
+            this.val = val;
+            this.list = list;
+        }
+
+        public Integer getVal() {
+            return this.val;
+        }
+
+        public ArrayList<Integer> getList() {
+            return this.list;
+        }
+    }
+
+
+    public void report_error(String message, Object info) {
+        System.err.print("ERROR: Syntax error");
+        if (info instanceof Symbol)
+            if (((Symbol)info).left != -1){
+                int line = (((Symbol)info).left)+1;
+                int column = (((Symbol)info).right)+1;
+                System.err.print(" (linea "+line+", colonna "+column+"): ");
+            } else System.err.print(": ");
+        else System.err.print(": ");
+    }
+    public void syntax_error(Symbol cur_token){}
+
+    // ritorna actual symbol (tos = top of stack) [dalla teoria]
+    public Symbol getToken() {
+        return ((Symbol)stack.elementAt(tos));
+    }
+
+    // ritorna il semantic value del simbolo alla posizione pos [dalla teoria]
+    public Object stack(int pos) {
+        return (((Symbol)stack.elementAt(tos + pos)).value);
+    }
+
+    // Return the line number of actual symbol
+    public int getLine() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).left+1;
+        }else return -1;
+    }
+    // Return the column number of actual symbol
+    public int getColumn() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).right+1;
+        }else return -1;
+    }
+:};
+
+action code {:
+    //creazione di classi se serve raggruppare
+:};
+
+//Simboli da jflex
+terminal SEP, TOK1, TOK2, PRINT, COMPARE, END, WITH, PV, GA, GC, TA, TC, PLUS, MINUS, STAR, DIVIDE, EQ;
+terminal Integer INT;
+terminal String VAR;
+
+//productions di cup
+non terminal prog, header, command_section, seq1, seq2, tok1s, tok2s, tok1e, tok1se, compare, assignment, command, command_list;
+non terminal Integer expr, print;
+non terminal ArrayList<Integer> print_list;
+non terminal Print comp;
+non terminal ArrayList<Print> comp_list;
+
+//precedenze se servono
+precedence left PLUS, MINUS;
+precedence left STAR, DIVIDE;
+
+
+start with prog;
+
+prog ::= header SEP command_section;
+
+header ::= seq1 | seq2;
+
+seq1 ::= tok1s tok2s;
+
+tok1s ::= tok1s TOK1 TOK1 | TOK1 TOK1 TOK1 TOK1 TOK1;
+
+tok2s ::= TOK2 TOK2 TOK2
+|TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2;
+
+seq2 ::= TOK2 tok1e TOK2 tok1e TOK2 tok1e;
+
+tok1e ::= tok1se | /*empty*/;
+
+tok1se ::= tok1se TOK1 | TOK1;
+
+command_section ::= command_list | /*empty*/;
+
+command_list ::= command_list command | command;
+
+command ::= assignment | compare;
+
+assignment ::= VAR:x EQ expr:val PV {:
+    parser.map.put(x, val);
+:};
+
+compare ::= COMPARE expr:v1 WITH comp_list:list END PV {:
+    for(Print p: list) {
+        if(p.getVal().equals(v1)){
+            for(Integer i: p.getList()) {
+                System.out.println(i);
+            }
+        }
+    }
+:};
+
+comp_list ::= comp_list:list comp:c {:
+    list.add(c);
+    RESULT = list;
+:}
+| comp:c {:
+    ArrayList<Print> list = new ArrayList();
+    list.add(c);
+    RESULT = list;
+:};
+
+comp ::= expr:v2 GA print_list:list GC {:
+    Print stamp = new Print(v2, list);
+    RESULT = stamp;
+:};
+
+print_list ::= print_list:list print:val {:
+    list.add(val);
+    RESULT = list;
+:}
+| print:val {:
+    ArrayList<Integer> list = new ArrayList();
+    list.add(val);
+    RESULT = list;
+:};
+
+print ::= PRINT expr:val PV {:
+    RESULT = val;
+:};
+
+expr ::= expr:e1 PLUS expr:e2 {:
+    Integer res = e1+e2;
+    RESULT = res;
+:}
+|expr:e1 MINUS expr:e2 {:
+    Integer res = e1-e2;
+    RESULT = res;
+:}
+|expr:e1 STAR expr:e2 {:
+    Integer res = e1*e2;
+    RESULT = res;
+:}
+|expr:e1 DIVIDE expr:e2 {:
+    Integer res = e1/e2;
+    RESULT = res;
+:}
+|TA expr:e1 PLUS expr:e2 TC {:
+    Integer res = e1+e2;
+    RESULT = res;
+:}
+|TA expr:e1 MINUS expr:e2 TC {:
+    Integer res = e1-e2;
+    RESULT = res;
+:}
+|TA expr:e1 STAR expr:e2 TC {:
+    Integer res = e1*e2;
+    RESULT = res;
+:}
+|TA expr:e1 DIVIDE expr:e2 TC {:
+    Integer res = e1/e2;
+    RESULT = res;
+:}
+|VAR:v {:
+    Integer val = parser.map.get(v);
+    RESULT = val;
+:}
+|INT:val {:
+    RESULT = val;
+:};

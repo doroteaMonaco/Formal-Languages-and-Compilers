@@ -1,0 +1,316 @@
+import java_cup.runtime.*;
+import java.io.*;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
+
+init with {:
+    map = new HashMap<String, ArrayList<Speed>>();
+:};
+
+parser code {:
+
+    HashMap<String, ArrayList<Speed>> map = new HashMap<String, ArrayList<Speed>>();
+
+    public Integer getMin(String name, ArrayList<String> list) {
+        ArrayList<Speed> sp = map.get(name);
+        Integer min = sp.get(0).getSpeed();
+        for(String str: list) {
+            for(Speed s: sp) {
+                if(str.equals(s.getName())){
+                    if(s.getSpeed() < min) {
+                        min = s.getSpeed();
+                    }
+                }
+            }
+        }
+        return min;
+    }
+
+    public Integer getMax(String name, ArrayList<String> list) {
+        ArrayList<Speed> sp = map.get(name);
+        Integer max = 0;
+        for(String str: list) {
+            for(Speed s: sp) {
+                if(str.equals(s.getName())){
+                    if(s.getSpeed() > max) {
+                        max = s.getSpeed();
+                    }
+                }
+            }
+        }
+        return max;
+    }
+
+    public Double computeStat(Stat s, String name) {
+        Double res = 0.0;
+        ArrayList<Speed> list = map.get(name);
+        for(Speed sp: list) {
+            if(sp.getName().equals(s.getName())){
+                res = Double.parseDouble(s.getStat().toString()) / Double.parseDouble(sp.getSpeed().toString());
+            }
+        }
+        return res;
+    }
+
+    public class Speed {
+        private String name;
+        private Integer speed;
+
+        Speed(String name, Integer speed) {
+            this.name = name;
+            this.speed = speed;
+        }
+
+        public String getName() {
+            return this.name;
+        }
+
+        public Integer getSpeed() {
+            return this.speed;
+        }
+    }
+
+    public class Stat {
+        private String name;
+        private Integer stat;
+
+        Stat(String name, Integer stat) {
+            this.name = name;
+            this.stat = stat;
+        }
+
+        public String getName() {
+            return this.name;
+        }
+
+        public Integer getStat() {
+            return this.stat;
+        }
+    }
+
+    public class Part {
+        private Integer npart;
+        private Double res;
+
+        Part(Integer npart, Double res) {
+            this.npart = npart;
+            this.res = res;
+        }
+
+        public Integer getN() {
+            return this.npart;
+        }
+
+        public Double getRes() {
+            return this.res;
+        }
+    }
+
+    public void report_error(String message, Object info) {
+        System.err.print("ERROR: Syntax error");
+        if (info instanceof Symbol)
+            if (((Symbol)info).left != -1){
+                int line = (((Symbol)info).left)+1;
+                int column = (((Symbol)info).right)+1;
+                System.err.print(" (linea "+line+", colonna "+column+"): ");
+            } else System.err.print(": ");
+        else System.err.print(": ");
+    }
+    public void syntax_error(Symbol cur_token){}
+
+    // ritorna actual symbol (tos = top of stack) [dalla teoria]
+    public Symbol getToken() {
+        return ((Symbol)stack.elementAt(tos));
+    }
+
+    // ritorna il semantic value del simbolo alla posizione pos [dalla teoria]
+    public Object stack(int pos) {
+        return (((Symbol)stack.elementAt(tos + pos)).value);
+    }
+
+    // Return the line number of actual symbol
+    public int getLine() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).left+1;
+        }else return -1;
+    }
+    // Return the column number of actual symbol
+    public int getColumn() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).right+1;
+        }else return -1;
+    }
+:};
+
+action code {:
+    //creazione di classi se serve raggruppare
+:};
+
+//Simboli da jflex
+terminal PV, GA, GC, TA, TC, V, BAR, DP, EQ, ARROW, TOK1, TOK2, TOK3, MS, M, PRINT, PART, SEP;
+terminal Integer INT;
+terminal String STR;
+
+//productions di cup
+non terminal prog, header, cars_section, race_section, print, cars, cars_list, tok1s, print_list;
+non terminal Stat stat;
+non terminal ArrayList<Stat> stat_list;
+non terminal Part part;
+non terminal ArrayList<Part> part_list;
+non terminal String[] performance;
+non terminal ArrayList<String[]> performance_list;
+non terminal String section;
+non terminal ArrayList<String> section_list;
+non terminal Speed speed;
+non terminal ArrayList<Speed> speed_list;
+
+//precedenze se servono
+
+start with prog;
+
+prog ::= header SEP cars_section SEP race_section;
+
+header ::= TOK2 TOK3
+|TOK3 TOK2
+|tok1s TOK2 tok1s TOK3 tok1s
+|tok1s TOK3 tok1s TOK2 tok1s
+|TOK2 tok1s TOK3 tok1s
+|TOK3 tok1s TOK2 tok1s
+|tok1s TOK2 tok1s TOK3 
+|tok1s TOK3 tok1s TOK2 
+|TOK2 tok1s TOK3 
+|TOK3 tok1s TOK2;
+
+tok1s ::= tok1s TOK1 | TOK1;
+
+cars_section ::= cars_list;
+
+cars_list ::= cars_list cars cars | cars cars;
+
+cars ::= STR:c GA speed_list:list GC {:
+    parser.map.put(c, list);
+:};
+
+speed_list ::= speed_list:list V speed:s {:
+    list.add(s);
+    RESULT = list;
+:}
+| speed:s {:
+    ArrayList<Speed> list = new ArrayList();
+    list.add(s);
+    RESULT = list;
+:};
+
+speed ::= STR:n EQ INT:v MS {:
+    Speed s = new Speed(n, v);
+    RESULT = s;
+:};
+
+race_section ::= print_list performance_list:p {:
+    String[] first = p.get(0);
+    Double min = Double.parseDouble(first[1]);
+    String minS = new String();
+    for(String[] s: p) {
+        if (Double.parseDouble(s[1]) < min) {
+            min = Double.parseDouble(s[1]);
+            minS = s[0];
+        }
+    }
+    System.out.println("WINNER:"+minS+min+"s");
+:}
+|performance_list:p {:
+    String[] first = p.get(0);
+    Double min = Double.parseDouble(first[1]);
+    String minS = new String();
+    for(String[] s: p) {
+        if (Double.parseDouble(s[1]) < min) {
+            min = Double.parseDouble(s[1]);
+            minS = s[0];
+        }
+    }
+    System.out.println("WINNER:"+minS+min+"s");
+:};
+
+print_list ::= print_list print | print;
+
+print ::= PRINT TA STR:name TC TA section_list:list TC PV {:
+    Integer min = getMin(name, list);
+    System.out.print("MIN:"+min);
+    Integer max = getMax(name, list);
+    System.out.print("MAX:"+max);
+:};
+
+section_list ::= section_list:list V section:s  {:
+    list.add(s);
+    RESULT = list;
+:}
+| section:s {:
+    ArrayList<String> list = new ArrayList();
+    list.add(s);
+    RESULT = list;
+:};
+
+section ::= STR:s {:
+    RESULT = s;
+:};
+
+performance_list ::= performance_list:list performance:p {:
+    list.add(p);
+    RESULT = list;
+:}
+| performance:p {:
+    ArrayList<String[]> list = new ArrayList();
+    list.add(p);
+    RESULT = list;
+:};
+
+performance ::= STR:car ARROW part_list:list PV {:
+    Double sum = 0.0;
+    System.out.println(car.toString());
+    for(Part p: list) {
+        System.out.println("PART"+p.getN()+":"+p.getRes());
+        sum += p.getRes();
+    }
+    System.out.println("TOT:"+sum);
+    String[] s = new String[2];
+    s[0] = car;
+    s[1] = sum.toString();
+    RESULT = s;
+:};
+
+part_list ::= part_list:list BAR part:p {:
+    list.add(p);
+    RESULT = list;
+:}
+| part:p {:
+    ArrayList<Part> list = new ArrayList();
+    list.add(p);
+    RESULT = list;
+:};
+
+part ::= PART INT:n DP stat_list:list {:
+    Double sum = 0.0;
+    for (Stat s: list) {
+        String name = parser.stack(-7).toString();
+        Double res = computeStat(s, name);
+        sum += res;
+    }
+    Part p = new Part(n, sum);
+    RESULT = p;
+:};
+
+stat_list ::= stat_list:list V stat:s{:
+    list.add(s);
+    RESULT = list;
+:} 
+| stat:s{:
+    ArrayList<Stat> list = new ArrayList();
+    list.add(s);
+    RESULT = list;
+:};
+
+stat ::= STR:name INT:m M {:
+    Stat s = new Stat(name, m);
+    RESULT = s;
+:};

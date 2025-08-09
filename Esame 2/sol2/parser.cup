@@ -1,0 +1,279 @@
+import java_cup.runtime.*;
+import java.io.*;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
+
+init with {:
+    map = new HashMap<String, ArrayList<Dest>>();
+:};
+
+parser code {:
+
+    HashMap<String, ArrayList<Dest>> map = new HashMap<String, ArrayList<Dest>>();
+
+    public class Dest {
+        private String dest;
+        private Double dist;
+
+        Dest(String dest, Double dist) {
+            this.dest = dest;
+            this.dist = dist;
+        }
+
+        public String getDest() {
+            return this.dest;
+        }
+
+        public Double getDist() {
+            return this.dist;
+        }
+    }
+
+    public class Time {
+        private Integer perc;
+        private Integer speed;
+
+        Time(Integer perc, Integer speed) {
+            this.perc = perc;
+            this.speed = speed;
+        }
+
+        public Integer getPerc() {
+            return this.perc;
+        }
+
+        public Integer getSpeed() {
+            return this.speed;
+        }
+    }
+
+    public class Exp {
+        private String code;
+        private Double exp;
+        private Double disc;
+
+        Exp(String code, Double exp, Double disc) {
+            this.code = code;
+            this.exp = exp;
+            this.disc = disc;
+        }
+
+        public String getCode() {
+            return this.code;
+        }
+
+        public Double getDisc() {
+            return this.disc;
+        }
+
+        public Double getEx() {
+            return this.exp;
+        }
+    }
+
+    public void report_error(String message, Object info) {
+        System.err.print("ERROR: Syntax error");
+        if (info instanceof Symbol)
+            if (((Symbol)info).left != -1){
+                int line = (((Symbol)info).left)+1;
+                int column = (((Symbol)info).right)+1;
+                System.err.print(" (linea "+line+", colonna "+column+"): ");
+            } else System.err.print(": ");
+        else System.err.print(": ");
+    }
+    public void syntax_error(Symbol cur_token){}
+
+    // ritorna actual symbol (tos = top of stack) [dalla teoria]
+    public Symbol getToken() {
+        return ((Symbol)stack.elementAt(tos));
+    }
+
+    // ritorna il semantic value del simbolo alla posizione pos [dalla teoria]
+    public Object stack(int pos) {
+        return (((Symbol)stack.elementAt(tos + pos)).value);
+    }
+
+    // Return the line number of actual symbol
+    public int getLine() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).left+1;
+        }else return -1;
+    }
+    // Return the column number of actual symbol
+    public int getColumn() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).right+1;
+        }else return -1;
+    }
+:};
+
+action code {:
+    //creazione di classi se serve raggruppare
+:};
+
+//Simboli da jflex
+terminal PV, V, MINUS, DP, PERC, ARROW, TOK1, TOK2, TOK3, KM, COMPUTE, TO, TIME, KMH, EXPENSE, EUROKM, DISC, EURO, EXTRA, SEP;
+terminal Integer INT;
+terminal String STR;
+terminal Double DOUBLE;
+
+//productions di cup
+non terminal prog, compute_list, compute, distance, distance_list, command_section, tok3e, tok3s, header;
+non terminal Double exp, disc;
+non terminal Exp expense;
+non terminal ArrayList<Exp> expense_list;
+non terminal Time time;
+non terminal ArrayList<Time> time_list;
+non terminal Dest dest;
+non terminal ArrayList<Dest> dest_list;
+//precedenze se servono
+
+start with prog;
+
+prog ::=  header SEP command_section;
+
+header ::= TOK2 tok3e TOK1 tok3e TOK1 tok3e
+|TOK1 tok3e TOK2 tok3e TOK1 tok3e
+|TOK1 tok3e TOK1 tok3e TOK2 tok3e
+|tok3s TOK2 tok3e TOK1 tok3e TOK1 tok3e
+|tok3s TOK1 tok3e TOK2 tok3e TOK1 tok3e
+|tok3s TOK1 tok3e TOK1 tok3e TOK2 tok3e;
+
+tok3s ::= tok3s TOK3 | TOK3;
+
+tok3e ::= tok3s | /*empty*/;
+
+command_section ::= distance_list compute_list
+|distance_list;
+
+distance_list ::= distance_list distance distance 
+|distance distance distance;
+
+distance ::= STR:par ARROW dest_list:list PV {:
+    parser.map.put(par, list);
+:};
+
+dest_list ::= dest_list:list V dest:dt {:
+    list.add(dt);
+    RESULT = list;
+:}
+|dest:dt {:
+    ArrayList<Dest> list = new ArrayList();
+    list.add(dt);
+    RESULT = list;
+:};
+
+dest ::= STR:d DOUBLE:dist KM {:
+    Dest dt = new Dest(d, dist);
+    RESULT = dt;
+:};
+
+compute_list ::= compute_list compute compute
+|compute;
+
+compute ::= COMPUTE STR:part TO STR:dest TIME DP time_list:list PV {:
+    ArrayList<Dest> dlist = parser.map.get(part);
+    Double dist = 0.0;
+    for(Dest dt: dlist) {
+        if(dt.getDest().equals(dest)){
+            dist = dt.getDist();
+        }
+    }
+
+    Integer i = 0;
+    Double tot = 0.0;
+    for(Time ti: list) {
+        Double res = dist * (ti.getPerc()/100.0) / ti.getSpeed();
+        tot += res;
+        System.out.println(i+" "+res);
+        i += 1;
+    }
+    System.out.println("TOT: "+tot);
+:}
+|COMPUTE STR:part TO STR:dest EXPENSE DP expense_list:list PV {:
+    ArrayList<Dest> dlist = parser.map.get(part);
+    Double dist = 0.0;
+    for(Dest dt: dlist) {
+        if(dt.getDest().equals(dest)){
+            dist = dt.getDist();
+        }
+    }
+
+    Exp first = list.get(0);
+    Double min = (dist * first.getEx()) - first.getDisc();
+    for(Exp ex: list) {
+        Double res = (dist * ex.getEx()) - ex.getDisc();
+        System.out.println(ex.getCode()+" "+res);
+        if (res < min) {
+            min = res;
+        }
+    }
+    System.out.println("MIN: "+min);
+:}
+|COMPUTE STR:part TO STR:dest EXPENSE EXTRA DOUBLE:cost DP expense_list:list PV  {:
+    ArrayList<Dest> dlist = parser.map.get(part);
+    Double dist = 0.0;
+    for(Dest dt: dlist) {
+        if(dt.getDest().equals(dest)){
+            dist = dt.getDist();
+        }
+    }
+
+    Exp first = list.get(0);
+    Double min = (dist * first.getEx()) - first.getDisc() - cost;
+    for(Exp ex: list) {
+        Double res = (dist * ex.getEx()) - ex.getDisc() - cost;
+        System.out.println(ex.getCode()+" "+res);
+        if (res < min) {
+            min = res;
+        }
+    }
+    System.out.println("MIN: "+min);
+:};
+
+time_list ::= time_list:list V time:ti  {:
+    list.add(ti);
+    RESULT = list;
+:} 
+|time:ti  {:
+    ArrayList<Time> list = new ArrayList();
+    list.add(ti);
+    RESULT = list;
+:};
+
+time ::= INT:perc PERC INT:speed KMH {:
+    Time ti = new Time(perc, speed);
+    RESULT = ti;
+:};
+
+expense_list ::= expense_list:list V expense:ex {:
+    list.add(ex);
+    RESULT = list;
+:}
+|expense:ex {:
+    ArrayList<Exp> list = new ArrayList();
+    list.add(ex);
+    RESULT = list;
+:};
+
+expense ::= STR:code exp:ex MINUS disc:di {:
+    Exp exp = new Exp(code, ex, di);
+    RESULT = exp;
+:}
+|STR:code disc:di MINUS exp:ex {:
+    Exp exp = new Exp(code, ex, di);
+    RESULT = exp;
+:}
+|STR:code exp:ex {:
+    Exp exp = new Exp(code, ex, 0.0);
+    RESULT = exp;
+:};
+
+disc ::= DISC DOUBLE:price EURO {:
+    RESULT = price;
+:};
+
+exp ::= DOUBLE:price EUROKM {:
+    RESULT = price;
+:};
