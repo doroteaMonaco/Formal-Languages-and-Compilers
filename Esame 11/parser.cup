@@ -1,0 +1,194 @@
+import java_cup.runtime.*;
+import java.io.*;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
+
+init with {:
+    map = new HashMap<String, ArrayList<Prod>>();
+:};
+
+parser code {:
+
+    HashMap<String, ArrayList<Prod>> map = new HashMap();
+    
+    public Double computeCost(String dress, Integer perc, Purch pc) {
+        ArrayList<Prod> list = map.get(dress);
+        Double cost = 0.0;
+
+        for(Prod pr: list) {
+            if(pr.getName().equals(pc.getName())){
+                cost = pr.getCost() * pc.getQuan() * (perc / 100.0);
+            }
+        }
+        return cost;
+    }
+
+    public class Prod {
+        private Integer id;
+        private String name;
+        private Double cost;
+
+        Prod(Integer id, String name, Double cost) {
+            this.id = id;
+            this.name = name;
+            this.cost = cost;
+        }
+
+        public Integer getId() {
+            return this.id;
+        }
+
+        public String getName() {
+            return this.name;
+        }
+
+        public Double getCost() {
+            return this.cost;
+        }
+    }
+
+    public class Purch {
+        private Integer quan;
+        private String name;
+
+        Purch(String name, Integer quan) {
+            this.name = name;
+            this.quan = quan;
+        }
+
+        public Integer getQuan() {
+            return this.quan;
+        }
+
+        public String getName() {
+            return this.name;
+        }
+    }
+
+    public void report_error(String message, Object info) {
+        System.err.print("ERROR: Syntax error");
+        if (info instanceof Symbol)
+            if (((Symbol)info).left != -1){
+                int line = (((Symbol)info).left)+1;
+                int column = (((Symbol)info).right)+1;
+                System.err.print(" (linea "+line+", colonna "+column+"): ");
+            } else System.err.print(": ");
+        else System.err.print(": ");
+    }
+    public void syntax_error(Symbol cur_token){}
+
+    // ritorna actual symbol (tos = top of stack) [dalla teoria]
+    public Symbol getToken() {
+        return ((Symbol)stack.elementAt(tos));
+    }
+
+    // ritorna il semantic value del simbolo alla posizione pos [dalla teoria]
+    public Object stack(int pos) {
+        return (((Symbol)stack.elementAt(tos + pos)).value);
+    }
+
+    // Return the line number of actual symbol
+    public int getLine() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).left+1;
+        }else return -1;
+    }
+    // Return the column number of actual symbol
+    public int getColumn() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).right+1;
+        }else return -1;
+    }
+:};
+
+action code {:
+    //creazione di classi se serve raggruppare
+:};
+
+//Simboli da jflex
+terminal PV, V, MINUS, PERC, TOK1, TOK3, TOK2, EURO, SEP;
+terminal String STR;
+terminal Integer INT;
+terminal Double DOUBLE;
+//productions di cup
+non terminal prog, purchase, purchase_list, shopping_section, dress, dress_list, dress_section, tok21, tok11, seq1, seq2, header;
+non terminal Purch purch_prod;
+non terminal ArrayList<Purch> purch_prod_list;
+non terminal Prod prod;
+non terminal ArrayList<Prod> prod_list;
+
+//precedenze se servono
+
+start with prog;
+
+prog ::= header SEP dress_section SEP shopping_section;
+
+header ::= seq1 | seq2;
+
+seq1 ::= tok11 tok21;
+
+tok11 ::= tok11 TOK1 TOK1 | TOK1 TOK1 TOK1;
+
+tok21 ::= TOK2 TOK2 TOK2
+|TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2
+|TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2 TOK2;
+
+seq2 ::= TOK2 TOK3 TOK1 TOK2;
+
+dress_section ::= dress_list;
+
+dress_list ::= dress_list dress dress | dress dress dress;
+
+dress ::= STR:name MINUS prod_list:list PV {:
+    parser.map.put(name, list);
+:};
+
+prod_list ::= prod_list:list V prod:pr  {:
+    list.add(pr);
+    RESULT = list;
+:}
+| prod:pr  {:
+    ArrayList<Prod> list = new ArrayList();
+    list.add(pr);
+    RESULT = list;
+:};
+
+prod ::= INT:id STR:name DOUBLE:cost EURO {:
+    Prod pr = new Prod(id, name, cost);
+    RESULT = pr;
+:};
+
+shopping_section ::= purchase_list;
+
+purchase_list ::= purchase_list purchase | purchase;
+
+purchase ::= STR:name INT:perc PERC MINUS purch_prod_list:list PV{:
+    System.out.println(name);
+    Double cost = 0.0;
+    Double tot = 0.0;
+    Integer count = 0;
+    for(Purch pc: list){
+        count += pc.getQuan();
+        cost = computeCost(name, perc, pc);
+        tot += cost;
+        System.out.println(pc.getName()+cost+" euro");
+    }
+    System.out.println("TOTAL: "+tot+" euro N_PROD: "+count);
+
+:};
+
+purch_prod_list ::= purch_prod_list:list V purch_prod:pc {:
+    list.add(pc);
+    RESULT = list;
+:} 
+| purch_prod:pc {:
+    ArrayList<Purch> list = new ArrayList();
+    list.add(pc);
+    RESULT = list;
+:};
+
+purch_prod ::= STR:name INT:quan {:
+    Purch pc = new Purch(name, quan);
+    RESULT = pc;
+:};

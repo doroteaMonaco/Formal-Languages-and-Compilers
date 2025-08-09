@@ -1,0 +1,204 @@
+import java_cup.runtime.*;
+import java.io.*;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
+
+init with {:
+    map = new HashMap<String, ArrayList<Room>>();
+:};
+
+parser code {:
+
+    HashMap<String, ArrayList<Room>> map = new HashMap<String, ArrayList<Room>>();
+
+    public class Room {
+        private String name;
+        private Integer size;
+
+        Room(String name, Integer size) {
+            this.name = name;
+            this.size = size;
+        }
+
+        public String getName() {
+            return this.name;
+        }
+
+        public Integer getSize() {
+            return this.size;
+        }
+    }
+
+    public void report_error(String message, Object info) {
+        System.err.print("ERROR: Syntax error");
+        if (info instanceof Symbol)
+            if (((Symbol)info).left != -1){
+                int line = (((Symbol)info).left)+1;
+                int column = (((Symbol)info).right)+1;
+                System.err.print(" (linea "+line+", colonna "+column+"): ");
+            } else System.err.print(": ");
+        else System.err.print(": ");
+    }
+    public void syntax_error(Symbol cur_token){}
+
+    // ritorna actual symbol (tos = top of stack) [dalla teoria]
+    public Symbol getToken() {
+        return ((Symbol)stack.elementAt(tos));
+    }
+
+    // ritorna il semantic value del simbolo alla posizione pos [dalla teoria]
+    public Object stack(int pos) {
+        return (((Symbol)stack.elementAt(tos + pos)).value);
+    }
+
+    // Return the line number of actual symbol
+    public int getLine() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).left+1;
+        }else return -1;
+    }
+    // Return the column number of actual symbol
+    public int getColumn() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).right+1;
+        }else return -1;
+    }
+:};
+
+action code {:
+    //creazione di classi se serve raggruppare
+:};
+
+terminal PV, V, DEQ, P, TA, TC, TOK1, TOK2, TOK3, HOUSE, ST, END, IF, THEN, FI, AND, OR, NOT, PRINT, SEP;
+terminal Integer INT;
+terminal String STR;
+
+non terminal prog, command, command_list, house, house_list, tok3s, header;
+non terminal String print;
+non terminal ArrayList<String> print_list;
+non terminal Integer room_ref;
+non terminal Boolean operand, exp;
+non terminal Room room;
+non terminal ArrayList<Room> room_list;
+//precedenze
+precedence left AND, OR;
+precedence left NOT;
+
+start with prog;
+
+prog ::= header SEP house_list SEP command_list
+|header SEP house_list;
+
+header ::= TOK1 TOK2
+|TOK2 TOK1
+|TOK1 tok3s TOK2 tok3s
+|TOK2 tok3s TOK1 tok3s
+|TOK1 tok3s TOK2 
+|TOK2 tok3s TOK1 
+|tok3s TOK1 tok3s TOK2 tok3s
+|tok3s TOK2 tok3s TOK1 tok3s
+|tok3s TOK2 TOK1 tok3s
+|tok3s TOK1 TOK2 tok3s
+|tok3s TOK1 tok3s TOK2
+|tok3s TOK2 tok3s TOK1;
+
+tok3s ::= tok3s TOK3
+|TOK3;
+
+house_list ::= house_list house house 
+|house house;
+
+house ::= HOUSE STR:name ST room_list:list END {:
+    parser.map.put(name, list);
+:};
+
+room_list ::= room_list:list V room:rm  {:
+    list.add(rm);
+    RESULT = list;
+:}
+|room:rm {:
+    ArrayList<Room> list = new ArrayList();
+    list.add(rm);
+    RESULT = list;
+:};
+
+room ::= STR:name INT:size {:
+    Room rm = new Room(name, size);
+    RESULT = rm;
+:};
+
+command_list ::= command_list command
+|command;
+
+command ::= IF exp:ex THEN print_list:list FI {:
+    if(ex == true){
+        for(String str: list){
+            System.out.println(str);
+        }
+    }
+:};
+
+exp ::= exp:e1 AND exp:e2  {:
+    Boolean res = e1&&e2;
+    RESULT = res;
+:}
+|exp:e1 OR exp:e2  {:
+    Boolean res = e1||e2;
+    RESULT = res;
+:}
+|NOT exp:ex  {:
+    Boolean res = !ex;
+    RESULT = res;
+:}
+|TA exp:e1 AND exp:e2 TC  {:
+    Boolean res = e1&&e2;
+    RESULT = res;
+:}
+|TA exp:e1 OR exp:e2 TC  {:
+    Boolean res = e1||e2;
+    RESULT = res;
+:}
+|TA NOT exp:ex TC {:
+    Boolean res = !ex;
+    RESULT = res;
+:}
+|operand:op {:
+    RESULT = op;
+:};
+
+operand ::= room_ref:size DEQ INT:x {:
+    Boolean res = true;
+    if(size.equals(x)){
+        res = true;
+    }
+    else {
+        res = false;
+    }
+    RESULT = res;
+:};
+
+room_ref ::= STR:type P STR:room {:
+    ArrayList<Room> list = parser.map.get(type);
+    Integer size = 0;
+    for(Room rm: list){
+        if(rm.getName().equals(room)){
+            size = rm.getSize();
+        }
+    }
+    RESULT = size;
+:};
+
+print_list ::= print_list:list print:pr {:
+    list.add(pr);
+    RESULT = list;
+:}
+|print:pr {:
+    ArrayList<String> list = new ArrayList();
+    list.add(pr);
+    RESULT = list;
+:};
+
+print ::= PRINT STR:str PV{:
+    RESULT = str;
+:};

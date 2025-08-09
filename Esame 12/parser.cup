@@ -1,0 +1,260 @@
+import java_cup.runtime.*;
+import java.io.*;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.ArrayList;
+
+init with {:
+    map = new HashMap<String, ArrayList<Attr>>();
+:};
+
+parser code {:
+
+    HashMap<String, ArrayList<Attr>> map = new HashMap<String, ArrayList<Attr>>();
+
+    public class Attr {
+        private String name;
+        private Integer val;
+
+        Attr(String name, Integer val) {
+            this.name = name;
+            this.val = val;
+        }
+
+        public String getName() {
+            return this.name;
+        }
+
+        public Integer getVal() {
+            return this.val;
+        }
+    }
+
+    public void report_error(String message, Object info) {
+        System.err.print("ERROR: Syntax error");
+        if (info instanceof Symbol)
+            if (((Symbol)info).left != -1){
+                int line = (((Symbol)info).left)+1;
+                int column = (((Symbol)info).right)+1;
+                System.err.print(" (linea "+line+", colonna "+column+"): ");
+            } else System.err.print(": ");
+        else System.err.print(": ");
+    }
+    public void syntax_error(Symbol cur_token){}
+
+    // ritorna actual symbol (tos = top of stack) [dalla teoria]
+    public Symbol getToken() {
+        return ((Symbol)stack.elementAt(tos));
+    }
+
+    // ritorna il semantic value del simbolo alla posizione pos [dalla teoria]
+    public Object stack(int pos) {
+        return (((Symbol)stack.elementAt(tos + pos)).value);
+    }
+
+    // Return the line number of actual symbol
+    public int getLine() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).left+1;
+        }else return -1;
+    }
+    // Return the column number of actual symbol
+    public int getColumn() {
+        if (((Symbol)stack.elementAt(tos)).left != -1){
+            return ((Symbol)stack.elementAt(tos)).right+1;
+        }else return -1;
+    }
+:};
+
+action code {:
+    //creazione di classi se serve raggruppare
+:};
+
+terminal PV, V, DOM, MINDOM, TA, TC, P, TOK1, TOK2, OBJ, NAME, END, AND, OR, NOT, EQ, NEQ, TRUE, FALSE, PRINT, SEP;
+terminal Integer INT;
+terminal String STR;
+
+non terminal prog, print, command, command_list, querie_section, obj, obj_list, obj_section, tok2s, header;
+non terminal String pr;
+non terminal ArrayList<String> print_list, print_true, print_false;
+non terminal Integer obj_ref;
+non terminal Boolean operand, exp;
+non terminal Attr attr;
+non terminal ArrayList<Attr> attr_list;
+//precedenze
+precedence left AND, OR;
+precedence left NOT;
+
+start with prog;
+
+prog ::= header SEP obj_section SEP querie_section;
+
+header ::= TOK1 tok2s
+|tok2s TOK1
+|TOK1 tok2s TOK1 tok2s
+|TOK1 TOK1 tok2s
+|TOK1 tok2s TOK1
+|tok2s TOK1 tok2s TOK1 tok2s
+|tok2s TOK1 TOK1 tok2s
+|tok2s TOK1 tok2s TOK1
+|tok2s TOK1 TOK1;
+
+tok2s ::= tok2s TOK2 | TOK2;
+
+obj_section ::= obj_list;
+
+obj_list ::= obj_list obj obj
+|obj obj;
+
+obj ::= OBJ attr_list:list NAME STR:name END {:
+    parser.map.put(name, list);
+:};
+
+attr_list ::= attr_list:list V attr:at {:
+    list.add(at);
+    RESULT = list;
+:}
+|attr:at {:
+    ArrayList<Attr> list = new ArrayList();
+    list.add(at);
+    RESULT = list;
+:};
+
+attr ::= STR:name INT:val {:
+    Attr at = new Attr(name, val);
+    RESULT = at;
+:};
+
+querie_section ::= command_list
+|/*empty*/;
+
+command_list ::= command_list command
+|command;
+
+command ::= DOM exp:ex print:pr MINDOM;
+
+exp ::= exp:e1 AND exp:e2  {:
+    Boolean res = e1&&e2;
+    RESULT = res;
+:}
+|exp:e1 OR exp:e2  {:
+    Boolean res = e1||e2;
+    RESULT = res;
+:}
+|NOT exp:ex  {:
+    Boolean res = !ex;
+    RESULT = res;
+:}
+|TA exp:e1 AND exp:e2 TC  {:
+    Boolean res = e1&&e2;
+    RESULT = res;
+:}
+|TA exp:e1 OR exp:e2 TC  {:
+    Boolean res = e1||e2;
+    RESULT = res;
+:}
+|TA NOT exp:ex TC {:
+    Boolean res = !ex;
+    RESULT = res;
+:}
+|operand:bx {:
+    RESULT = bx;
+:};
+
+operand ::= obj_ref:val EQ INT:x {:
+    Boolean res = true;
+    if(val.equals(x)){
+        res = true;
+    }
+    else {
+        res = false;
+    }
+    RESULT = res;
+:}
+|obj_ref:val NEQ INT:x {:
+    Boolean res = true;
+    if(val.equals(x)){
+        res = false;
+    }
+    else {
+        res = true;
+    }
+    RESULT = res;
+:};
+
+obj_ref ::= STR:obj P STR:name {:
+    ArrayList<Attr> list = parser.map.get(obj);
+    Integer val = 0;
+    for(Attr at: list){
+        if(at.getName().equals(name)) {
+            val = at.getVal();
+        }
+    }
+    RESULT = val;
+:};
+
+print ::= print_true:l1 print_false:l2{:
+   Boolean bx = (Boolean) parser.stack(-2);
+   if(bx == true){
+        for(String str: l1){
+            System.out.println(str);
+        }
+   }
+   else {
+        for(String str: l2){
+            System.out.println(str);
+        }
+   }
+:}
+|print_false:l2 print_true:l1 {:
+   Boolean bx = (Boolean) parser.stack(-2);
+   if(bx == true){
+        for(String str: l1){
+            System.out.println(str);
+        }
+   }
+   else {
+        for(String str: l2){
+            System.out.println(str);
+        }
+   }
+:}
+|print_true:l1{:
+    Boolean bx = (Boolean) parser.stack(-1);
+    if(bx == true){
+        for(String str: l1){
+            System.out.println(str);
+        }
+    }
+:}
+|print_false:l1 {:
+    Boolean bx = (Boolean) parser.stack(-1);
+    if(bx == false){
+        for(String str: l1){
+            System.out.println(str);
+        }
+    }
+:};
+
+print_true ::= TRUE print_list:list {:
+    RESULT = list;
+:};
+
+print_false ::= FALSE print_list:list {:
+    RESULT = list;
+:};
+
+print_list ::= print_list:list pr:str {:
+    list.add(str);
+    RESULT = list;
+:} 
+|pr:str {:
+    ArrayList<String> list = new ArrayList();
+    list.add(str);
+    RESULT = list;
+:};
+
+pr ::= PRINT STR:str {:
+    RESULT = str;
+:};
+
